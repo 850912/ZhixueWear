@@ -1,0 +1,59 @@
+plugins {
+    id 'com.android.application'
+}
+
+def signingFile = System.getenv("KEYSTORE_FILE")
+def signingStorePassword = System.getenv("KEYSTORE_PASSWORD")
+def signingAlias = System.getenv("KEY_ALIAS")
+def signingKeyPassword = System.getenv("KEY_PASSWORD")
+def hasSigning = signingFile && signingStorePassword && signingAlias && signingKeyPassword
+
+android {
+    namespace 'com.example.zhixuewear'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.example.zhixuewear"
+        minSdk 30
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    if (hasSigning) {
+        signingConfigs {
+            release {
+                storeFile file(signingFile)
+                storePassword signingStorePassword
+                keyAlias signingAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            if (hasSigning) {
+                signingConfig signingConfigs.release
+            }
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+}

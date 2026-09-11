@@ -165,3 +165,24 @@ XToken: <服务器返回 token>
 - Cookie 仅发给 `https://www.zhixue.com`。
 - Cookie 在本地通过 Android Keystore 保护的 AES/GCM 密钥加密保存。
 - GitHub Actions 的签名密钥必须放 Secrets，不要提交 `.jks` / `.keystore` 到仓库。
+
+## v1.2.0 Wear Material 3
+
+界面已迁移到官方 Wear Compose Material 3：
+
+- `AppScaffold` + `ScreenScaffold`
+- Wear M3 `Card` / `Button` / `ListHeader`
+- Wear 专用滚动列表与滚动指示器
+- 最近成绩离线缓存
+- 刷新失败保留旧成绩
+- 最后更新时间
+- 各科得分率
+- Cookie-Editor JSON 直接导入
+
+更新源码后，在 Termux 直接运行已有的一键命令：
+
+```bash
+zxbuild
+```
+
+即可自动提交、推送并触发 GitHub Actions Debug 构建。

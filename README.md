@@ -28,6 +28,24 @@
 
 建议只在自己的设备上使用自己的账号。Cookie 等同登录凭证，不要发给别人，也不要提交到 GitHub。
 
+
+## Cookie-Editor 直接导入
+
+登录页现在支持两种格式：
+
+1. Cookie-Editor 导出的完整 JSON 数组（推荐，直接原样粘贴）
+2. 传统 Cookie Header：`name=value; name2=value2`
+
+App 会自动识别 JSON、去除重复 Cookie，并优先采用 `www.zhixue.com` 的 hostOnly Cookie。
+
+另外附带 Termux/电脑转换工具：
+
+```bash
+python tools/cookie-convert.py cookies.json
+```
+
+会输出可直接作为 HTTP `Cookie` 请求头使用的一整行字符串。
+
 ## GitHub Actions 编译
 
 仓库包含两个 workflow：

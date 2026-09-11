@@ -79,13 +79,13 @@ public class MainActivity extends Activity {
 
         TextView hint = text(
                 "智学网当前登录可能触发人机验证，因此本版使用网页端 Cookie 登录。\n\n" +
-                "在电脑/手机浏览器登录 www.zhixue.com 后，复制请求中的 Cookie 整串并粘贴到这里。",
+                "支持直接粘贴 Cookie-Editor 导出的完整 JSON，也支持传统 Cookie Header。",
                 13);
         hint.setTextColor(0xFFBDBDBD);
         add(hint);
 
         EditText input = new EditText(this);
-        input.setHint("loginUserName=...; JSESSIONID=...");
+        input.setHint("直接粘贴 Cookie-Editor JSON\n或 JSESSIONID=...; loginUserName=...");
         input.setTextColor(Color.WHITE);
         input.setHintTextColor(0xFF777777);
         input.setTextSize(13);

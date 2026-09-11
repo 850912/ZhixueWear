@@ -12,7 +12,9 @@ import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -245,10 +247,18 @@ public class ZhixueClient {
 
     private static String normalizeCookie(String raw) {
         if (raw == null) return "";
-        String value = raw.trim()
-                .replace("\r", "")
-                .replace("\n", "")
-                .replaceFirst("(?i)^cookie:\\s*", "");
+        String input = raw.trim();
+        String value;
+
+        // Cookie-Editor 默认导出的是 JSON 数组。允许用户把整段 JSON 原样粘贴。
+        if (input.startsWith("[")) {
+            value = cookieEditorJsonToHeader(input);
+        } else {
+            value = input
+                    .replace("\r", "")
+                    .replace("\n", "")
+                    .replaceFirst("(?i)^cookie:\\s*", "");
+        }
 
         if (!containsCookie(value, "uname") && containsCookie(value, "loginUserName")) {
             String username = cookieValue(value, "loginUserName");
@@ -260,6 +270,48 @@ public class ZhixueClient {
             }
         }
         return value;
+    }
+
+    private static String cookieEditorJsonToHeader(String jsonText) {
+        try {
+            JSONArray array = new JSONArray(jsonText);
+            // Cookie-Editor 可能同时导出 .zhixue.com 和 www.zhixue.com 的同名 Cookie。
+            // 对直接请求 www.zhixue.com 来说优先使用 hostOnly/www.zhixue.com 项。
+            Map<String, JSONObject> chosen = new LinkedHashMap<>();
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+                if (item == null) continue;
+                String name = item.optString("name", "").trim();
+                if (name.isEmpty() || !item.has("value")) continue;
+
+                JSONObject old = chosen.get(name);
+                if (old == null || cookiePriority(item) >= cookiePriority(old)) {
+                    chosen.put(name, item);
+                }
+            }
+
+            StringBuilder out = new StringBuilder();
+            for (Map.Entry<String, JSONObject> entry : chosen.entrySet()) {
+                if (out.length() > 0) out.append("; ");
+                out.append(entry.getKey()).append("=")
+                        .append(entry.getValue().optString("value", ""));
+            }
+            if (out.length() == 0) {
+                throw new IllegalArgumentException("JSON 中没有找到 Cookie name/value");
+            }
+            return out.toString();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cookie-Editor JSON 格式无法解析：" + e.getMessage(), e);
+        }
+    }
+
+    private static int cookiePriority(JSONObject item) {
+        String domain = item.optString("domain", "");
+        boolean hostOnly = item.optBoolean("hostOnly", false);
+        if (hostOnly && "www.zhixue.com".equalsIgnoreCase(domain)) return 3;
+        if ("www.zhixue.com".equalsIgnoreCase(domain)) return 2;
+        if (domain.endsWith("zhixue.com")) return 1;
+        return 0;
     }
 
     private static boolean containsCookie(String cookie, String name) {

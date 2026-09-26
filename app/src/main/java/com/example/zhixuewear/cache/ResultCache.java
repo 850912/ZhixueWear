@@ -17,6 +17,7 @@ public class ResultCache {
     private static final String PREF = "result_cache";
     private static final String KEY_JSON = "latest_result";
     private static final String KEY_UPDATED = "updated_at";
+    private static final String KEY_EXAMS = "recent_exams";
     private final SharedPreferences prefs;
 
     public ResultCache(Context context) {
@@ -73,6 +74,38 @@ public class ResultCache {
 
     public long updatedAt() {
         return prefs.getLong(KEY_UPDATED, 0L);
+    }
+
+    public void saveExams(List<Exam> exams) {
+        try {
+            JSONArray arr = new JSONArray();
+            for (Exam exam : exams) {
+                JSONObject item = new JSONObject();
+                item.put("examId", exam.id);
+                item.put("examName", exam.name);
+                item.put("createTime", exam.createTime);
+                arr.put(item);
+            }
+            prefs.edit().putString(KEY_EXAMS, arr.toString()).apply();
+        } catch (Exception ignored) { }
+    }
+
+    public List<Exam> loadExams() {
+        List<Exam> exams = new ArrayList<>();
+        try {
+            String raw = prefs.getString(KEY_EXAMS, null);
+            if (raw == null) return exams;
+            JSONArray arr = new JSONArray(raw);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject item = arr.optJSONObject(i);
+                if (item == null) continue;
+                exams.add(new Exam(
+                        item.optString("examId"),
+                        item.optString("examName", "考试"),
+                        item.optString("createTime")));
+            }
+        } catch (Exception ignored) { }
+        return exams;
     }
 
     public void clear() {

@@ -153,6 +153,8 @@ private fun ZhixueWearApp() {
                     error = state.error,
                     onLogin = { raw ->
                         state = state.copy(loading = true, error = null)
+                        // A new account must never inherit the previous account's offline data.
+                        cache.clear()
                         client.setCookie(raw)
                         scope.launch {
                             try {
@@ -175,9 +177,20 @@ private fun ZhixueWearApp() {
                         scope.launch {
                             try {
                                 val exams = withContext(Dispatchers.IO) { client.getRecentExams(30) }
+                                withContext(Dispatchers.IO) { cache.saveExams(exams) }
                                 state = state.copy(page = Page.HISTORY, loading = false, exams = exams)
                             } catch (e: Exception) {
-                                state = state.copy(loading = false, error = e.message ?: "历史考试加载失败")
+                                val cachedExams = withContext(Dispatchers.IO) { cache.loadExams() }
+                                if (cachedExams.isNotEmpty()) {
+                                    state = state.copy(
+                                        page = Page.HISTORY,
+                                        loading = false,
+                                        exams = cachedExams,
+                                        error = "网络不可用，显示上次同步的历史考试"
+                                    )
+                                } else {
+                                    state = state.copy(loading = false, error = "历史考试加载失败，请检查手表网络")
+                                }
                             }
                         }
                     },

@@ -33,6 +33,14 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Require signing secrets
+        shell: bash
+        run: |
+          test -n "$SIGNING_KEYSTORE_BASE64" || (echo "Missing SIGNING_KEYSTORE_BASE64"; exit 1)
+          test -n "$KEYSTORE_PASSWORD" || (echo "Missing KEYSTORE_PASSWORD"; exit 1)
+          test -n "$KEY_ALIAS" || (echo "Missing KEY_ALIAS"; exit 1)
+          test -n "$KEY_PASSWORD" || (echo "Missing KEY_PASSWORD"; exit 1)
+
       - name: Decode signing keystore
         if: ${{ env.SIGNING_KEYSTORE_BASE64 != '' }}
         shell: bash
@@ -45,7 +53,6 @@ jobs:
         run: gradle --no-daemon clean assembleRelease
 
       - name: Verify APK signature
-        if: ${{ env.SIGNING_KEYSTORE_BASE64 != '' && env.KEYSTORE_PASSWORD != '' && env.KEY_ALIAS != '' && env.KEY_PASSWORD != '' }}
         run: |
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           APKSIGNER=$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -n 1)

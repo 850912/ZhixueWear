@@ -379,7 +379,8 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                             }
-                            settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Wear OS) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36"
+                            // Use a normal Android Chrome profile; some WAF rules block explicit Wear OS/WebView UAs.
+                            settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36"
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                             }

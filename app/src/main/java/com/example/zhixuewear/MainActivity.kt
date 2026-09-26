@@ -13,6 +13,13 @@ import android.webkit.WebResourceRequest
 import android.os.Build
 import android.view.View
 import android.webkit.WebSettings
+import android.os.Handler
+import android.os.Looper
+import okhttp3.Request
+import okhttp3.OkHttpClient
+import org.json.JSONObject
+import java.util.UUID
+import java.security.MessageDigest
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -348,6 +355,7 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
     val cookieManager = remember { CookieManager.getInstance() }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var unavailable by remember { mutableStateOf<String?>(null) }
+    var verifying by remember { mutableStateOf(false) }
     ScreenScaffold { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             AndroidView(
@@ -400,7 +408,7 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                                     CookieManager.getInstance().flush()
                                 }
                             }
-                            loadUrl("https://www.zhixue.com/")
+                            loadUrl("https://www.zhixue.com/wap_login.html")
                             webView = this
                         }
                     } catch (e: Throwable) {
@@ -415,17 +423,54 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Button(onClick = onBack, modifier = Modifier.weight(1f), label = { Text("返回") })
                 Button(
-                    enabled = unavailable == null && webView != null,
+                    enabled = unavailable == null && webView != null && !verifying,
                     onClick = {
                         cookieManager.flush()
                         val cookie = cookieManager.getCookie("https://www.zhixue.com/").orEmpty()
-                        onSessionReady(cookie)
+                        verifying = true
+                        Thread {
+                            val valid = verifyWebSession(cookie)
+                            android.os.Handler(Looper.getMainLooper()).post {
+                                verifying = false
+                                if (valid) onSessionReady(cookie)
+                                else unavailable = "尚未登录成功，请完成极验滑块/点选后再点击“已登录”"
+                            }
+                        }.start()
                     },
                     modifier = Modifier.weight(1f),
-                    label = { Text("已登录") }
+                    label = { Text(if (verifying) "校验中" else "已登录") }
                 )
             }
         }
+    }
+}
+
+private fun verifyWebSession(cookie: String): Boolean {
+    if (cookie.isBlank()) return false
+    return try {
+        val http = OkHttpClient()
+        fun get(url: String, headers: Map<String, String> = emptyMap()): JSONObject {
+            val b = Request.Builder().url(url).header("Cookie", cookie)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 Chrome/124.0.6367.82 Mobile Safari/537.36")
+            headers.forEach { (k, v) -> b.header(k, v) }
+            http.newCall(b.build()).execute().use { response ->
+                if (!response.isSuccessful) throw IllegalStateException()
+                JSONObject(response.body?.string().orEmpty())
+            }
+        }
+        val user = get("https://www.zhixue.com/container/getCurrentUser")
+        val result = user.optJSONObject("result")
+        if (result == null || result.optString("role").isBlank()) return false
+        val guid = UUID.randomUUID().toString()
+        val timestamp = System.currentTimeMillis().toString()
+        val md5 = MessageDigest.getInstance("MD5").digest((guid + timestamp + "iflytek!@#123student").toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val token = get("https://www.zhixue.com/container/app/token/getToken", mapOf(
+            "authbizcode" to "0001", "authguid" to guid, "authtimestamp" to timestamp, "authtoken" to md5
+        ))
+        token.optString("result").isNotBlank()
+    } catch (_: Exception) {
+        false
     }
 }
 

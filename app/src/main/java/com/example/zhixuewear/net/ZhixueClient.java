@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.Headers;
 
 public class ZhixueClient {
     private static final String BASE = "https://www.zhixue.com";
@@ -55,6 +56,31 @@ public class ZhixueClient {
 
     public String getCookie() {
         return cookie;
+    }
+
+    /** Merge server-issued cookies so rolling sessions are not lost between requests. */
+    private void mergeResponseCookies(Response response) {
+        Headers headers = response.headers();
+        List<String> setCookies = headers.values("Set-Cookie");
+        if (setCookies.isEmpty()) return;
+        LinkedHashMap<String, String> values = new LinkedHashMap<>();
+        if (cookie != null) {
+            for (String part : cookie.split(";")) {
+                int idx = part.indexOf('=');
+                if (idx > 0) values.put(part.substring(0, idx).trim(), part.substring(idx + 1).trim());
+            }
+        }
+        for (String setCookie : setCookies) {
+            String first = setCookie.split(";", 2)[0].trim();
+            int idx = first.indexOf('=');
+            if (idx > 0) values.put(first.substring(0, idx).trim(), first.substring(idx + 1).trim());
+        }
+        StringBuilder merged = new StringBuilder();
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            if (merged.length() > 0) merged.append("; ");
+            merged.append(entry.getKey()).append('=').append(entry.getValue());
+        }
+        cookie = merged.toString();
     }
 
     public String validateSession() throws Exception {
@@ -196,6 +222,7 @@ public class ZhixueClient {
         }
 
         try (Response response = http.newCall(b.build()).execute()) {
+            mergeResponseCookies(response);
             String body = response.body() == null ? "" : response.body().string();
             if (!response.isSuccessful()) {
                 throw new Exception("HTTP " + response.code() + ": " + shorten(body));
@@ -226,6 +253,7 @@ public class ZhixueClient {
                     .build();
 
             try (Response response = http.newCall(req).execute()) {
+                mergeResponseCookies(response);
                 String body = response.body() == null ? "" : response.body().string();
                 if (!response.isSuccessful()) {
                     throw new Exception("获取 XToken 失败，HTTP " + response.code());

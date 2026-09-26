@@ -4,6 +4,15 @@ import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
 import android.widget.EditText
+import android.webkit.CookieManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.os.Build
+import android.view.View
+import android.webkit.WebSettings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -63,7 +72,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Page { LOGIN, HOME, HISTORY, DETAIL }
+private enum class Page { LOGIN, WEB_LOGIN, HOME, HISTORY, DETAIL }
 
 private data class UiState(
     val page: Page = Page.LOGIN,
@@ -90,6 +99,7 @@ private fun ZhixueWearApp() {
         try {
             val result = withContext(Dispatchers.IO) { client.latestResult }
             withContext(Dispatchers.IO) { cache.save(result) }
+            withContext(Dispatchers.IO) { store.saveCookie(client.cookie) }
             state = state.copy(
                 loading = false,
                 result = result,
@@ -151,6 +161,7 @@ private fun ZhixueWearApp() {
                 Page.LOGIN -> LoginScreen(
                     loading = state.loading,
                     error = state.error,
+                    onWebLogin = { state = state.copy(page = Page.WEB_LOGIN, error = null) },
                     onLogin = { raw ->
                         state = state.copy(loading = true, error = null)
                         // A new account must never inherit the previous account's offline data.
@@ -163,6 +174,23 @@ private fun ZhixueWearApp() {
                                 loadLatest(name)
                             } catch (e: Exception) {
                                 state = state.copy(loading = false, error = e.message ?: "登录失败")
+                            }
+                        }
+                    }
+                )
+                Page.WEB_LOGIN -> WebLoginScreen(
+                    onBack = { state = state.copy(page = Page.LOGIN, error = null) },
+                    onSessionReady = { raw ->
+                        state = state.copy(page = Page.LOGIN, loading = true, error = null)
+                        client.setCookie(raw)
+                        cache.clear()
+                        scope.launch {
+                            try {
+                                val name = withContext(Dispatchers.IO) { client.validateSession() }
+                                withContext(Dispatchers.IO) { store.saveCookie(client.cookie) }
+                                loadLatest(name)
+                            } catch (e: Exception) {
+                                state = state.copy(loading = false, error = e.message ?: "网页登录未完成")
                             }
                         }
                     }
@@ -230,7 +258,12 @@ private fun ZhixueWearApp() {
 
 
 @Composable
-private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String) -> Unit) {
+private fun LoginScreen(
+    loading: Boolean,
+    error: String?,
+    onWebLogin: () -> Unit,
+    onLogin: (String) -> Unit
+) {
     val scrollState = rememberScalingLazyListState()
     var input by remember { mutableStateOf("") }
 
@@ -242,6 +275,15 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String) -> U
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             item { ListHeader { Text("智学成绩") } }
+            item {
+                Button(
+                    onClick = onWebLogin,
+                    enabled = !loading,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("在手表网页登录") },
+                    secondaryLabel = { Text("无需手机 Cookie") }
+                )
+            }
             item {
                 Text(
                     "Wear OS · Material 3",
@@ -296,6 +338,92 @@ private fun LoginScreen(loading: Boolean, error: String?, onLogin: (String) -> U
                 )
             }
             if (loading) item { CircularProgressIndicator() }
+        }
+    }
+}
+
+@Composable
+private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit) {
+    val context = LocalContext.current
+    val cookieManager = remember { CookieManager.getInstance() }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var unavailable by remember { mutableStateOf<String?>(null) }
+    ScreenScaffold { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                factory = {
+                    try {
+                        CookieManager.getInstance().setAcceptCookie(true)
+                        WebView(context).apply {
+                            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                            isFocusable = true
+                            isFocusableInTouchMode = true
+                            requestFocus(View.FOCUS_DOWN)
+                            setBackgroundColor(android.graphics.Color.WHITE)
+                            settings.javaScriptEnabled = true
+                            settings.javaScriptCanOpenWindowsAutomatically = true
+                            settings.domStorageEnabled = true
+                            settings.databaseEnabled = true
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = true
+                            settings.setSupportMultipleWindows(false)
+                            settings.setSupportZoom(true)
+                            settings.builtInZoomControls = true
+                            settings.displayZoomControls = false
+                            settings.useWideViewPort = true
+                            settings.loadWithOverviewMode = true
+                            settings.textZoom = 100
+                            settings.cacheMode = WebSettings.LOAD_DEFAULT
+                            settings.mediaPlaybackRequiresUserGesture = false
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                            }
+                            settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Wear OS) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36"
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                            }
+                            webChromeClient = WebChromeClient()
+                            webViewClient = object : WebViewClient() {
+                                override fun onReceivedError(
+                                    view: WebView,
+                                    request: WebResourceRequest,
+                                    error: WebResourceError
+                                ) {
+                                    if (request.isForMainFrame) {
+                                        unavailable = "网页加载失败：${error.description}"
+                                    }
+                                }
+
+                                override fun onPageFinished(view: WebView, url: String) {
+                                    CookieManager.getInstance().flush()
+                                }
+                            }
+                            loadUrl("https://www.zhixue.com/")
+                            webView = this
+                        }
+                    } catch (e: Throwable) {
+                        unavailable = "此手表没有可用的 WebView，请返回使用 Cookie-Editor 导入"
+                        android.view.View(context)
+                    }
+                }
+            )
+            if (!unavailable.isNullOrBlank()) {
+                Card(modifier = Modifier.fillMaxWidth()) { Text(unavailable!!) }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(onClick = onBack, modifier = Modifier.weight(1f), label = { Text("返回") })
+                Button(
+                    enabled = unavailable == null && webView != null,
+                    onClick = {
+                        cookieManager.flush()
+                        val cookie = cookieManager.getCookie("https://www.zhixue.com/").orEmpty()
+                        onSessionReady(cookie)
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("已登录") }
+                )
+            }
         }
     }
 }

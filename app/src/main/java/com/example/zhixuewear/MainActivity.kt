@@ -387,8 +387,8 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                             }
-                            // Use a normal Android Chrome profile; some WAF rules block explicit Wear OS/WebView UAs.
-                            settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36"
+                            // Keep the provider's real UA. Spoofing Chrome/Pixel while running WebView
+                            // creates an inconsistent fingerprint that some WAFs reject.
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                             }
@@ -429,7 +429,7 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                         val cookie = cookieManager.getCookie("https://www.zhixue.com/").orEmpty()
                         verifying = true
                         Thread {
-                            val valid = verifyWebSession(cookie)
+                            val valid = verifyWebSession(cookie, WebSettings.getDefaultUserAgent(context))
                             android.os.Handler(Looper.getMainLooper()).post {
                                 verifying = false
                                 if (valid) onSessionReady(cookie)
@@ -445,13 +445,13 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
     }
 }
 
-private fun verifyWebSession(cookie: String): Boolean {
+private fun verifyWebSession(cookie: String, userAgent: String): Boolean {
     if (cookie.isBlank()) return false
     return try {
         val http = OkHttpClient()
         fun get(url: String, headers: Map<String, String> = emptyMap()): JSONObject {
             val b = Request.Builder().url(url).header("Cookie", cookie)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 Chrome/124.0.6367.82 Mobile Safari/537.36")
+                .header("User-Agent", userAgent)
             headers.forEach { (k, v) -> b.header(k, v) }
             return http.newCall(b.build()).execute().use { response ->
                 if (!response.isSuccessful) throw IllegalStateException()

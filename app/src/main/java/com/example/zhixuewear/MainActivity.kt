@@ -453,7 +453,7 @@ private fun verifyWebSession(cookie: String): Boolean {
             val b = Request.Builder().url(url).header("Cookie", cookie)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 Chrome/124.0.6367.82 Mobile Safari/537.36")
             headers.forEach { (k, v) -> b.header(k, v) }
-            http.newCall(b.build()).execute().use { response ->
+            return http.newCall(b.build()).execute().use { response ->
                 if (!response.isSuccessful) throw IllegalStateException()
                 JSONObject(response.body?.string().orEmpty())
             }

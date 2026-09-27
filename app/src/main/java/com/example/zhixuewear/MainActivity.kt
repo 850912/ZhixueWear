@@ -366,6 +366,7 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
     var webView by remember { mutableStateOf<WebView?>(null) }
     var unavailable by remember { mutableStateOf<String?>(null) }
     var verifying by remember { mutableStateOf(false) }
+    var pageLoading by remember { mutableStateOf(true) }
     DisposableEffect(webView) {
         onDispose {
             webView?.let { view ->
@@ -385,6 +386,8 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                     try {
                         CookieManager.getInstance().setAcceptCookie(true)
                         WebView(context).apply {
+                            // Samsung Wear OS GPUs can leave Chromium's default surface white.
+                            setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                             isFocusable = true
                             isFocusableInTouchMode = true
                             requestFocus(View.FOCUS_DOWN)
@@ -414,6 +417,10 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                             }
                             webChromeClient = WebChromeClient()
                             webViewClient = object : WebViewClient() {
+                                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                                    pageLoading = true
+                                }
+
                                 override fun onReceivedError(
                                     view: WebView,
                                     request: WebResourceRequest,
@@ -421,10 +428,12 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                                 ) {
                                     if (request.isForMainFrame) {
                                         unavailable = "网页加载失败：${error.description}"
+                                        pageLoading = false
                                     }
                                 }
 
                                 override fun onPageFinished(view: WebView, url: String) {
+                                    pageLoading = false
                                     CookieManager.getInstance().flush()
                                 }
                             }
@@ -437,6 +446,9 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                     }
                 }
             )
+            if (pageLoading && unavailable == null) {
+                CircularProgressIndicator()
+            }
             if (!unavailable.isNullOrBlank()) {
                 Card(modifier = Modifier.fillMaxWidth()) { Text(unavailable!!) }
             }

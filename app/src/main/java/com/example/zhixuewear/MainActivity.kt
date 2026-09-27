@@ -41,6 +41,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.animateContentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -365,6 +366,17 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
     var webView by remember { mutableStateOf<WebView?>(null) }
     var unavailable by remember { mutableStateOf<String?>(null) }
     var verifying by remember { mutableStateOf(false) }
+    DisposableEffect(webView) {
+        onDispose {
+            webView?.let { view ->
+                view.stopLoading()
+                view.webChromeClient = null
+                view.webViewClient = WebViewClient()
+                view.destroy()
+            }
+            webView = null
+        }
+    }
     ScreenScaffold { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             AndroidView(
@@ -373,7 +385,6 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                     try {
                         CookieManager.getInstance().setAcceptCookie(true)
                         WebView(context).apply {
-                            setLayerType(View.LAYER_TYPE_HARDWARE, null)
                             isFocusable = true
                             isFocusableInTouchMode = true
                             requestFocus(View.FOCUS_DOWN)
@@ -714,3 +725,4 @@ private fun fmt(value: Double): String =
 
 private fun formatTime(time: Long): String =
     SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(time))
+

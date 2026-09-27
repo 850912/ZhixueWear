@@ -106,7 +106,7 @@ private fun ZhixueWearApp() {
         try {
             val result = withContext(Dispatchers.IO) { client.latestResult }
             withContext(Dispatchers.IO) { cache.save(result) }
-            withContext(Dispatchers.IO) { store.saveCookie(client.cookie) }
+            withContext(Dispatchers.IO) { store.saveCookie(client.cookieState) }
             state = state.copy(
                 loading = false,
                 result = result,
@@ -137,7 +137,7 @@ private fun ZhixueWearApp() {
         if (saved.isNullOrBlank()) {
             state = UiState(page = Page.LOGIN)
         } else {
-            client.setCookie(saved)
+            if (saved.startsWith("ZJ1:")) client.setCookieState(saved) else client.setCookie(saved)
             state = state.copy(page = Page.HOME, loading = true)
             try {
                 val name = withContext(Dispatchers.IO) { client.validateSession() }
@@ -177,7 +177,7 @@ private fun ZhixueWearApp() {
                         scope.launch {
                             try {
                                 val name = withContext(Dispatchers.IO) { client.validateSession() }
-                                withContext(Dispatchers.IO) { store.saveCookie(client.cookie) }
+                                withContext(Dispatchers.IO) { store.saveCookie(client.cookieState) }
                                 loadLatest(name)
                             } catch (e: Exception) {
                                 state = state.copy(loading = false, error = e.message ?: "登录失败")
@@ -194,7 +194,7 @@ private fun ZhixueWearApp() {
                         scope.launch {
                             try {
                                 val name = withContext(Dispatchers.IO) { client.validateSession() }
-                                withContext(Dispatchers.IO) { store.saveCookie(client.cookie) }
+                                withContext(Dispatchers.IO) { store.saveCookie(client.cookieState) }
                                 loadLatest(name)
                             } catch (e: Exception) {
                                 state = state.copy(loading = false, error = e.message ?: "网页登录未完成")
@@ -231,7 +231,7 @@ private fun ZhixueWearApp() {
                     },
                     onLogin = { state = state.copy(page = Page.LOGIN, loading = false) },
                     onLogout = {
-                        store.clear(); cache.clear(); client.setCookie("")
+                        store.clear(); cache.clear(); client.clearCookies()
                         state = UiState(page = Page.LOGIN)
                     }
                 )

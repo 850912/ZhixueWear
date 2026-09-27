@@ -23,6 +23,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.Headers;
+import okhttp3.CookieJar;
 
 public class ZhixueClient {
     private static final String BASE = "https://www.zhixue.com";
@@ -34,28 +35,51 @@ public class ZhixueClient {
     private static final String REPORT_URL = BASE + "/zhixuebao/report/exam/getReportMain";
 
     private final OkHttpClient http;
+    private final PersistentCookieJar cookieJar;
     private String cookie;
     private String xToken;
     private long xTokenAt;
 
     public ZhixueClient() {
+        cookieJar = new PersistentCookieJar();
         http = new OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(20, TimeUnit.SECONDS)
                 .callTimeout(30, TimeUnit.SECONDS)
                 .followRedirects(true)
                 .followSslRedirects(true)
+                .cookieJar(cookieJar)
                 .build();
     }
 
     public void setCookie(String rawCookie) {
+        cookieJar.clear();
         cookie = normalizeCookie(rawCookie);
+        cookieJar.importHeader(cookie);
+        cookie = cookieJar.toHeader();
         xToken = null;
         xTokenAt = 0L;
     }
 
     public String getCookie() {
+        cookie = cookieJar.toHeader();
         return cookie;
+    }
+
+    public void setCookieState(String state) {
+        cookieJar.loadState(state);
+        cookie = cookieJar.toHeader();
+        xToken = null;
+        xTokenAt = 0L;
+    }
+
+    public String getCookieState() { return cookieJar.toState(); }
+
+    public void clearCookies() {
+        cookieJar.clear();
+        cookie = "";
+        xToken = null;
+        xTokenAt = 0L;
     }
 
     /** Merge server-issued cookies so rolling sessions are not lost between requests. */
@@ -206,7 +230,6 @@ public class ZhixueClient {
         Request.Builder b = new Request.Builder()
                 .url(url)
                 .get()
-                .header("Cookie", cookie)
                 .header("Accept", "application/json, text/plain, */*")
                 .header("User-Agent",
                         "Mozilla/5.0 (Linux; Android 14; Wear OS) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36")
@@ -222,7 +245,6 @@ public class ZhixueClient {
         }
 
         try (Response response = http.newCall(b.build()).execute()) {
-            mergeResponseCookies(response);
             String body = response.body() == null ? "" : response.body().string();
             if (!response.isSuccessful()) {
                 throw new Exception("HTTP " + response.code() + ": " + shorten(body));
@@ -244,7 +266,6 @@ public class ZhixueClient {
             Request req = new Request.Builder()
                     .url(TOKEN_URL)
                     .get()
-                    .header("Cookie", cookie)
                     .header("authbizcode", "0001")
                     .header("authguid", guid)
                     .header("authtimestamp", ts)
@@ -253,7 +274,6 @@ public class ZhixueClient {
                     .build();
 
             try (Response response = http.newCall(req).execute()) {
-                mergeResponseCookies(response);
                 String body = response.body() == null ? "" : response.body().string();
                 if (!response.isSuccessful()) {
                     throw new Exception("获取 XToken 失败，HTTP " + response.code());

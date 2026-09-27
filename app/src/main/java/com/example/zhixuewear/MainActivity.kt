@@ -34,7 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.clip
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -644,7 +644,7 @@ private fun SummaryCard(result: ExamResult) {
         Text("本场概览", fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             SummaryValue("科目", "${scored.size}")
-            SummaryValue("总分", total?.let(::fmt) ?: "--")
+            SummaryValue("总分", total?.score?.let(::fmt) ?: "--")
             SummaryValue("平均", average?.let(::fmt) ?: "--")
         }
     }

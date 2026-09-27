@@ -519,7 +519,7 @@ private fun HomeScreen(
                 }
             }
             state.result?.let { result ->
-                item(key = "exam-header-${result.exam.id}") {
+                item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Text(result.exam.name, fontWeight = FontWeight.SemiBold)
                         if (result.exam.createTime.isNotBlank()) {
@@ -538,7 +538,7 @@ private fun HomeScreen(
                         }
                     }
                 }
-                item(key = "summary-${result.exam.id}") { SummaryCard(result) }
+                item { SummaryCard(result) }
                 items(result.scores) { score -> ScoreCard(score) }
             }
             item {
@@ -697,7 +697,7 @@ private fun ScoreCard(item: ScoreItem) {
             Box(
                 modifier = Modifier.fillMaxWidth().height(5.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
             ) {
                 Box(
                     modifier = Modifier.fillMaxWidth(progress).height(5.dp)

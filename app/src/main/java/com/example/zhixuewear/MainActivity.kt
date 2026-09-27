@@ -81,6 +81,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -378,6 +379,15 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
             webView = null
         }
     }
+    LaunchedEffect(webView) {
+        if (webView != null) {
+            delay(15000)
+            if (pageLoading && unavailable == null) {
+                pageLoading = false
+                unavailable = "网页加载超时，请检查手表网络后重试"
+            }
+        }
+    }
     ScreenScaffold { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             AndroidView(
@@ -436,6 +446,17 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
                                     pageLoading = false
                                     CookieManager.getInstance().flush()
                                 }
+
+                                override fun onReceivedHttpError(
+                                    view: WebView,
+                                    request: WebResourceRequest,
+                                    errorResponse: android.webkit.WebResourceResponse
+                                ) {
+                                    if (request.isForMainFrame && errorResponse.statusCode >= 400) {
+                                        pageLoading = false
+                                        unavailable = "网页返回错误 ${errorResponse.statusCode}，请稍后重试"
+                                    }
+                                }
                             }
                             loadUrl("https://www.zhixue.com/wap_login.html")
                             webView = this
@@ -451,6 +472,17 @@ private fun WebLoginScreen(onBack: () -> Unit, onSessionReady: (String) -> Unit)
             }
             if (!unavailable.isNullOrBlank()) {
                 Card(modifier = Modifier.fillMaxWidth()) { Text(unavailable!!) }
+                if (webView != null) {
+                    Button(
+                        onClick = {
+                            unavailable = null
+                            pageLoading = true
+                            webView?.reload()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("重新加载网页") }
+                    )
+                }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Button(onClick = onBack, modifier = Modifier.weight(1f), label = { Text("返回") })

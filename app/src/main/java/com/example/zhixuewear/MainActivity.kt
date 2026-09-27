@@ -23,6 +23,7 @@ import java.security.MessageDigest
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +32,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clip
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -498,13 +507,19 @@ private fun HomeScreen(
             if (state.loading && state.result == null) item { CircularProgressIndicator() }
             if (!state.error.isNullOrBlank()) {
                 item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(state.error, color = MaterialTheme.colorScheme.error)
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut()
+                    ) {
+                        Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+                            Text(state.error.orEmpty(), color = if (state.showingCache) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             }
             state.result?.let { result ->
-                item {
+                item(key = "exam-header-${result.exam.id}") {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Text(result.exam.name, fontWeight = FontWeight.SemiBold)
                         if (result.exam.createTime.isNotBlank()) {
@@ -523,6 +538,7 @@ private fun HomeScreen(
                         }
                     }
                 }
+                item(key = "summary-${result.exam.id}") { SummaryCard(result) }
                 items(result.scores) { score -> ScoreCard(score) }
             }
             item {
@@ -620,9 +636,39 @@ private fun DetailScreen(loading: Boolean, result: ExamResult?, error: String?, 
 }
 
 @Composable
+private fun SummaryCard(result: ExamResult) {
+    val scored = result.scores.filter { !it.subject.contains("总") }
+    val total = result.scores.firstOrNull { it.subject.contains("总") }
+    val average = if (scored.isNotEmpty()) scored.map { it.score }.average() else null
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Text("本场概览", fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            SummaryValue("科目", "${scored.size}")
+            SummaryValue("总分", total?.let(::fmt) ?: "--")
+            SummaryValue("平均", average?.let(::fmt) ?: "--")
+        }
+    }
+}
+
+@Composable
+private fun SummaryValue(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontWeight = FontWeight.Bold)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
 private fun ScoreCard(item: ScoreItem) {
     val percent = if (item.fullScore > 0) (item.score / item.fullScore * 100.0).coerceIn(0.0, 999.0) else null
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val progress = ((percent ?: 0.0) / 100.0).coerceIn(0.0, 1.0).toFloat()
+    val barColor = when {
+        percent == null -> MaterialTheme.colorScheme.primary
+        percent >= 90 -> Color(0xFF65C18C)
+        percent >= 60 -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.error
+    }
+    Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -645,6 +691,19 @@ private fun ScoreCard(item: ScoreItem) {
                 fontWeight = if (item.subject.contains("总")) FontWeight.Bold else FontWeight.SemiBold,
                 textAlign = TextAlign.End
             )
+        }
+        if (percent != null) {
+            Spacer(Modifier.height(6.dp))
+            Box(
+                modifier = Modifier.fillMaxWidth().height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(progress).height(5.dp)
+                        .clip(RoundedCornerShape(3.dp)).background(barColor)
+                )
+            }
         }
     }
 }

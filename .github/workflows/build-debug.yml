@@ -19,10 +19,12 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: gradle
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
       - name: Install Android SDK 35
         run: |
-          sdkmanager --list_installed
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
       - name: Run tests and build debug APK
         run: |
           chmod +x ./gradlew

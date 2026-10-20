@@ -2,8 +2,9 @@ package org.openwear.temperature
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,7 +15,6 @@ import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.Card
-import androidx.wear.compose.material3.HorizontalDivider
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 
@@ -28,7 +28,7 @@ internal fun TemperatureScreen(
     ScreenScaffold(scrollState = listState) { contentPadding ->
         TransformingLazyColumn(
             state = listState,
-            contentPadding = contentPadding + PaddingValues(horizontal = 10.dp),
+            contentPadding = contentPadding,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -64,11 +64,11 @@ internal fun TemperatureScreen(
                     }
                 }
             }
-            item { HorizontalDivider(Modifier.padding(vertical = 2.dp)) }
+            item { Spacer(Modifier.height(8.dp)) }
             item { Text("研究记录", fontWeight = FontWeight.Medium, textAlign = TextAlign.Center) }
             item { Text("本机配对观测：$researchCount 条", textAlign = TextAlign.Center) }
             item { Text("本版本不生成体温估算。", textAlign = TextAlign.Center) }
-            item { HorizontalDivider(Modifier.padding(vertical = 2.dp)) }
+            item { Spacer(Modifier.height(8.dp)) }
             item { Text("测量提示", fontWeight = FontWeight.Medium, textAlign = TextAlign.Center) }
             item { Text("静坐并贴合佩戴。运动、洗澡或温差环境后等待 30 分钟。", textAlign = TextAlign.Center) }
             item { Text("仅供趋势观察，不用于发烧判断、诊断或治疗。", textAlign = TextAlign.Center) }

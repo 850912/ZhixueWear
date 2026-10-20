@@ -10,10 +10,9 @@ import org.junit.Test
 class TemperatureQualityTest {
     @Test
     fun acceptsFiniteInRangeSamplesWithPositiveAccuracy() {
-        assertTrue(TemperatureQuality.isValidSample(34.2f, 24.0f, 1))
-        assertFalse(TemperatureQuality.isValidSample(Float.NaN, 24.0f, 1))
-        assertFalse(TemperatureQuality.isValidSample(46.0f, 24.0f, 1))
-        assertFalse(TemperatureQuality.isValidSample(34.2f, 24.0f, 0))
+        assertTrue(TemperatureQuality.isValidSample(34.2f, 24.0f))
+        assertFalse(TemperatureQuality.isValidSample(Float.NaN, 24.0f))
+        assertFalse(TemperatureQuality.isValidSample(46.0f, 24.0f))
     }
 
     @Test

@@ -150,8 +150,7 @@ internal class SamsungSkinTemperatureReader(
                 }
             }
             TemperatureQuality.summarize(samples)?.let { summary ->
-                val status = if (summary.meanCelsius == null) MeasurementStatus.UNSTABLE else MeasurementStatus.COMPLETE
-                finish(status, summary.message, summary.meanCelsius, summary.spreadCelsius)
+                finish(summary.status, summary.detail, summary.meanCelsius, summary.spreadCelsius)
             }
             if (samples.size >= TemperatureQuality.MAX_SAMPLES) {
                 finish(MeasurementStatus.UNSTABLE, "收到样本但波动仍较大；请静坐、贴合佩戴后重试")

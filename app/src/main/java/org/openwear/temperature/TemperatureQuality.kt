@@ -13,18 +13,18 @@ internal object TemperatureQuality {
         val spread = values.max() - values.min()
         return when {
             spread <= MAX_STABLE_SPREAD_C -> MeasurementResult(
-                mean, spread, samples.size,
+                mean, spread, samples.size, MeasurementStatus.COMPLETE,
                 "腕部皮肤温度读数稳定；不代表核心体温。"
             )
             samples.size >= MAX_SAMPLES -> MeasurementResult(
-                null, spread, samples.size,
+                null, spread, samples.size, MeasurementStatus.UNSTABLE,
                 "皮肤温度变化过大，本次测量不稳定；请静坐并重新测量。"
             )
             else -> null
         }
     }
 
-    fun isValidSample(skinCelsius: Float, ambientCelsius: Float, accuracy: Int): Boolean =
+    fun isValidSample(skinCelsius: Float, ambientCelsius: Float): Boolean =
         skinCelsius.isFinite() && ambientCelsius.isFinite() &&
-            skinCelsius in 10f..45f && ambientCelsius in -20f..60f && accuracy > 0
+            skinCelsius in 10f..45f && ambientCelsius in -20f..60f
 }

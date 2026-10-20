@@ -59,7 +59,7 @@ internal class SamsungSkinTemperatureReader(
         active = true
         emit(MeasurementStatus.CONNECTING, "正在连接三星 Health Sensor Service…")
         timeout = Runnable {
-            finish(MeasurementStatus.TIMEOUT, "30 秒内未收到皮肤温度样本。请确认手表贴合手腕后重试")
+            finish(MeasurementStatus.TIMEOUT, "120 秒内未收到稳定皮肤温度样本。请确认手表贴合手腕后重试")
         }.also { mainHandler.postDelayed(it, MEASUREMENT_TIMEOUT_MS) }
         try {
             service = HealthTrackingService(connectionListener, appContext).also { it.connectService() }
@@ -90,12 +90,12 @@ internal class SamsungSkinTemperatureReader(
                     finish(MeasurementStatus.ERROR, "读取传感器能力失败：${it.javaClass.simpleName}")
                     return@post
                 }
-            if (!supported.contains(HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS)) {
-                    finish(MeasurementStatus.UNSUPPORTED, "Health Platform 已连接，但当前手表未提供连续皮肤温度传感器")
+            if (!supported.contains(HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND)) {
+                    finish(MeasurementStatus.UNSUPPORTED, "Health Platform 已连接，但当前手表未提供按需皮肤温度传感器")
                 return@post
             }
             try {
-                tracker = current.getHealthTracker(HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS)
+                tracker = current.getHealthTracker(HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND)
                 tracker?.setEventListener(trackerListener)
                     ?: finish(MeasurementStatus.ERROR, "SDK 未返回皮肤温度 tracker")
                 if (active) emit(MeasurementStatus.MEASURING, "传感器已启动，等待有效样本…")
@@ -141,11 +141,11 @@ internal class SamsungSkinTemperatureReader(
                 val skin = point.getValue(ValueKey.SkinTemperatureSet.OBJECT_TEMPERATURE)
                 val ambient = point.getValue(ValueKey.SkinTemperatureSet.AMBIENT_TEMPERATURE)
                 val sampleStatus = point.getValue(ValueKey.SkinTemperatureSet.STATUS)
-                if (sampleStatus == -1) {
-                    finish(MeasurementStatus.ERROR, "三星传感器报告温度数据错误，请清洁传感器并确保与皮肤接触")
+                if (sampleStatus != null && sampleStatus != 0) {
+                    finish(MeasurementStatus.ERROR, "三星传感器报告温度数据错误（状态 $sampleStatus），请清洁传感器并确保与皮肤接触")
                     return@post
                 }
-                if (skin != null && ambient != null && sampleStatus == 0 && TemperatureQuality.isValidSample(skin, ambient)) {
+                if (skin != null && ambient != null && TemperatureQuality.isValidSample(skin, ambient)) {
                     samples += TemperatureSample(skin, ambient, point.timestamp)
                 }
             }
@@ -200,6 +200,6 @@ internal class SamsungSkinTemperatureReader(
     }
 
     companion object {
-        private const val MEASUREMENT_TIMEOUT_MS = 30_000L
+        private const val MEASUREMENT_TIMEOUT_MS = 120_000L
     }
 }

@@ -1,9 +1,8 @@
 .gradle/
-.idea/
+.gradle-user-home/
+.tmp/
 local.properties
-build/
-*/build/
+**/build/
 *.iml
-*.jks
-*.keystore
-release.keystore
+.idea/
+.DS_Store

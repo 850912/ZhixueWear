@@ -1,23 +1,23 @@
 # Wrist Skin Temperature Wear
 
-An isolated Wear OS prototype for Samsung Galaxy Watch skin-temperature readings. This repository replaces the retired ZhixueWear app; it is unrelated to the Motion Photo project.
+An isolated Wear OS prototype for Samsung Galaxy Watch skin-temperature readings. This repository replaces the retired ZhixueWear app and is unrelated to the Motion Photo project.
 
 ## Features
 
 - Reads Samsung skin-temperature samples and labels them as wrist skin temperature, not core body temperature.
-- Checks sample ranges and short-window stability. The 0.4 °C spread is an engineering quality filter, not a clinical accuracy claim.
-- Optional local research log for pairing a stable skin-temperature reading with an independent reference-thermometer reading.
-- Does not calculate or display a body-temperature estimate. No validated model or training dataset is included.
+- Uses sample range and short-window stability checks. The 0.4 °C spread is an engineering quality filter, not a clinical accuracy claim.
+- Shows separate Health Sensor Service connection, device capability, permission, SDK-policy, tracker-error, and timeout states.
+- Keeps a local count of paired research observations. This build does not calculate or display a body-temperature estimate.
 
-## Hardware and SDK limitations
+## Samsung SDK and hardware
 
-The adapter uses Samsung's platform `SemSensorManager` API by reflection and sensor type `65578`, based on inspection of the supplied APK. This is not a public cross-vendor Android API. Runtime operation requires a compatible Galaxy Watch, Samsung Health Platform / sensor service, firmware support, and body-sensor / skin-temperature permissions. Emulator and non-Samsung watch testing cannot validate sensor access.
+The project includes Samsung Health Sensor SDK 1.4.1 in `app/libs/` and uses `HealthTrackingService`, `HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS`, and `ValueKey.SkinTemperatureSet`. Runtime operation requires a supported Galaxy Watch, current Samsung Health Sensor Service / Health Platform, supported firmware, and the appropriate runtime body-sensor permission. Emulator and non-Samsung watch testing cannot validate the hardware path.
 
-The Samsung Health Sensor SDK AAR was not supplied. Reflected Samsung classes may be absent at runtime, even on a compatible watch. Obtain and link the currently licensed SDK, verify the official API contract, and test on physical target watches before distribution.
+The SDK archive's announcement and license text is included at `licenses/samsung-health-sensor-sdk-1.4.1-Announcement.txt`. Review it before redistribution.
 
 ## Research data cautions
 
-Paired observations are stored in app-private preferences. They are not uploaded or separately encrypted. The prototype does not enforce a research protocol, participant consent, or reference-instrument calibration. Do not use observations for diagnosis or clinical model training without an approved protocol, suitable reference measurements, independent subject-level validation, and regulatory review.
+Any paired research observations are local-only. They are not uploaded or separately encrypted. The prototype does not enforce a research protocol, participant consent, or reference-instrument calibration. Do not use results for diagnosis, treatment, or clinical model training without an approved protocol, suitable reference measurements, independent subject-level validation, and regulatory review.
 
 ## Build
 

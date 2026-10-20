@@ -25,7 +25,7 @@ class TemperatureQualityTest {
         assertNotNull(result)
         assertEquals(34.08f, result!!.meanCelsius!!, 0.001f)
         assertEquals(0.2f, result.spreadCelsius!!, 0.001f)
-        assertTrue(result.message.contains("不代表核心体温"))
+        assertTrue(result.detail.contains("不代表核心体温"))
     }
 
     @Test
@@ -35,10 +35,10 @@ class TemperatureQualityTest {
         val result = TemperatureQuality.summarize(samples(readings))
         assertNotNull(result)
         assertNull(result!!.meanCelsius)
-        assertTrue(result.message.contains("不稳定"))
+        assertTrue(result.detail.contains("不稳定"))
     }
 
     private fun samples(values: List<Float>) = values.mapIndexed { index, value ->
-        TemperatureSample(value, 24.0f, 1, index.toLong())
+        TemperatureSample(value, 24.0f, index.toLong())
     }
 }

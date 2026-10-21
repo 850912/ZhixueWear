@@ -29,10 +29,10 @@ class TemperatureQualityTest {
         val two = samples(listOf(34.0f, 34.1f))
         assertNull(TemperatureQuality.summarize(two, MeasurementMode.ACCURATE))
 
-        val three = samples(listOf(34.0f, 34.1f, 34.2f))
-        val result = TemperatureQuality.summarize(three, MeasurementMode.ACCURATE)
+        val five = samples(listOf(34.0f, 34.1f, 34.2f, 34.1f, 34.0f))
+        val result = TemperatureQuality.summarize(five, MeasurementMode.ACCURATE)
         assertNotNull(result)
-        assertEquals(34.1f, result!!.meanCelsius!!, 0.01f)
+        assertEquals(34.08f, result!!.meanCelsius!!, 0.01f)
         assertEquals(0.2f, result.spreadCelsius!!, 0.001f)
         assertTrue(result.detail.contains("准确测量"))
     }

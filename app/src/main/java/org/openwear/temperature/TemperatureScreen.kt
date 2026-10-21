@@ -1,31 +1,84 @@
 package org.openwear.temperature
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumnDefaults
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
+import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonDefaults
+import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.Card
-import androidx.wear.compose.material3.HorizontalDivider
-import androidx.wear.compose.material3.OutlinedTextField
+import androidx.wear.compose.material3.CardDefaults
+import androidx.wear.compose.material3.CircularProgressIndicator
+import androidx.wear.compose.material3.EdgeButton
+import androidx.wear.compose.material3.EdgeButtonSize
+import androidx.wear.compose.material3.FilledTonalButton
+import androidx.wear.compose.material3.LinearProgressIndicator
+import androidx.wear.compose.material3.ListHeader
+import androidx.wear.compose.material3.ListHeaderDefaults
+import androidx.wear.compose.material3.MaterialTheme
+import androidx.wear.compose.material3.OutlinedCard
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Switch
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.TextButton
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.dp
+import androidx.wear.compose.material3.TitleCard
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 
 @Composable
 internal fun TemperatureScreen(
@@ -42,6 +95,7 @@ internal fun TemperatureScreen(
     onMeasure: () -> Unit
 ) {
     val listState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
     val now = System.currentTimeMillis()
     val filtered = history.filter { (t, _) -> now - t <= trendRange.millis }
@@ -52,6 +106,23 @@ internal fun TemperatureScreen(
 
     val isActiveMeasuring = result.status == MeasurementStatus.CONNECTING ||
         result.status == MeasurementStatus.MEASURING
+    val minRequiredSamples = TemperatureQuality.minSamples(mode).coerceAtLeast(1)
+    val rawProgress = when (result.status) {
+        MeasurementStatus.IDLE -> 0f
+        MeasurementStatus.CONNECTING -> 0.18f
+        MeasurementStatus.MEASURING -> (result.sampleCount.toFloat() / minRequiredSamples.toFloat())
+            .coerceIn(0.22f, 0.95f)
+        MeasurementStatus.COMPLETE -> 1f
+        else -> 0f
+    }
+    val animatedArcProgress by animateFloatAsState(
+        targetValue = rawProgress,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "m3eBezelArcProgress"
+    )
 
     ScreenScaffold(
         scrollState = listState,
@@ -64,7 +135,7 @@ internal fun TemperatureScreen(
                 .verticalArrangement(Arrangement.spacedBy(6.dp)),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 大标题：腕部皮肤温度
+            // 大标题：皮肤温度
             Text(
                 text = "皮肤温度",
                 style = MaterialTheme.typography.titleLarge,
@@ -178,53 +249,33 @@ internal fun TemperatureScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // 个人趋势
-            ListHeader(
-                modifier = Modifier.fillMaxWidth(),
-                title = {
-                    Text(
-                        text = "个人趋势 · ${trendRange.label}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+            Text(
+                text = "个人趋势 · ${trendRange.label}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
             )
-
-            itemRow(
-                label = "样本数",
-                value = filtered.size.toString(),
-                unit = "条"
-            )
-            itemRow(
-                label = "趋势均值",
-                value = trendMean?.let { "%.1f°".format(it) } ?: "--°",
-                unit = ""
-            )
-            itemRow(
-                label = "范围",
-                value = if (trendMin != null && trendMax != null) "${"%.1f°".format(trendMin)} – ${"%.1f°".format(trendMax)}" else "--°",
-                unit = ""
-            )
+            RowRangeButtons(range = trendRange, onRangeChanged = onTrendRangeChanged)
 
             if (filtered.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "最近记录（最近 ${filtered.size} 条）",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
+                    text = "样本 ${filtered.size} · 均值 ${"%.1f°".format(trendMean)}",
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
-                filtered.takeLast(5).reversed().forEach { (time, value) ->
-                    itemRow(
-                        label = formatTime(time),
-                        value = "%.1f°".format(value),
-                        unit = ""
+                filtered.takeLast(8).reversed().forEach { (time, value) ->
+                    Text(
+                        text = "${formatTime(time)}  ${"%.1f°".format(value)}",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             } else {
                 Text(
                     text = "该时段暂无历史记录",
                     textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

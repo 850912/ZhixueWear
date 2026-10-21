@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
     )
     private var mode by mutableStateOf(MeasurementMode.ACCURATE)
     private var history by mutableStateOf(loadHistory())
+    private var trendRange by mutableStateOf(TrendRange.DAY)
     private var permissionMessage by mutableStateOf("")
 
     private val permissions: Array<String>
@@ -46,6 +47,8 @@ class MainActivity : ComponentActivity() {
             )
             mode = runCatching { MeasurementMode.valueOf(it.getString(KEY_MODE).orEmpty()) }
                 .getOrDefault(MeasurementMode.ACCURATE)
+            trendRange = runCatching { TrendRange.valueOf(it.getString(KEY_TREND).orEmpty()) }
+                .getOrDefault(TrendRange.DAY)
         }
         setContent {
             MaterialTheme {
@@ -53,9 +56,11 @@ class MainActivity : ComponentActivity() {
                     TemperatureScreen(
                         result = result,
                         mode = mode,
+                        trendRange = trendRange,
                         history = history,
                         permissionMessage = permissionMessage,
                         onModeChanged = { mode = it },
+                        onTrendRangeChanged = { trendRange = it },
                         onMeasure = ::requestMeasurementPermission
                     )
                 }
@@ -70,6 +75,7 @@ class MainActivity : ComponentActivity() {
         outState.putString(KEY_STATUS, result.status.name)
         outState.putString(KEY_DETAIL, result.detail)
         outState.putString(KEY_MODE, mode.name)
+        outState.putString(KEY_TREND, trendRange.name)
         super.onSaveInstanceState(outState)
     }
 
@@ -105,7 +111,7 @@ class MainActivity : ComponentActivity() {
                     .put("timeMillis", System.currentTimeMillis())
                     .put("skinCelsius", skin.toDouble())
             )
-            while (rows.length() > 20) rows.remove(0)
+            while (rows.length() > 200) rows.remove(0)
             prefs.edit().putString(KEY_ROWS, rows.toString()).apply()
             history = loadHistory()
         }
@@ -128,5 +134,6 @@ class MainActivity : ComponentActivity() {
         const val KEY_STATUS = "status"
         const val KEY_DETAIL = "detail"
         const val KEY_MODE = "mode"
+        const val KEY_TREND = "trend"
     }
 }

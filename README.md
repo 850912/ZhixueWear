@@ -5,13 +5,16 @@ An isolated Wear OS prototype for Samsung Galaxy Watch skin-temperature readings
 ## Features
 
 - Reads Samsung skin-temperature samples and labels them as wrist skin temperature, not core body temperature.
-- Uses sample range and short-window stability checks. The 0.4 °C spread is an engineering quality filter, not a clinical accuracy claim.
+- Two measurement modes:
+  - **快速测量** (~25 s): returns the first valid sample for a quick check.
+  - **准确测量** (~105 s): requires 5 stable samples (spread ≤ 0.4 °C) for a more reliable reading.
+- Personal trend view with selectable time ranges: 1 hour, 1 day, 1 week, 1 month.
 - Shows separate Health Sensor Service connection, device capability, permission, SDK-policy, tracker-error, and timeout states.
-- Keeps a local count of paired research observations. This build does not calculate or display a body-temperature estimate.
+- Local history storage (up to 200 readings) with mean and range summary per selected period.
 
 ## Samsung SDK and hardware
 
-The project includes Samsung Health Sensor SDK 1.4.1 in `app/libs/` and uses `HealthTrackingService`, `HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS`, and `ValueKey.SkinTemperatureSet`. Runtime operation requires a supported Galaxy Watch, current Samsung Health Sensor Service / Health Platform, supported firmware, and the appropriate runtime body-sensor permission. Emulator and non-Samsung watch testing cannot validate the hardware path.
+The project includes Samsung Health Sensor SDK 1.4.1 in `app/libs/` and uses `HealthTrackingService`, `HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND`, and `ValueKey.SkinTemperatureSet`. Runtime operation requires a supported Galaxy Watch, current Samsung Health Sensor Service / Health Platform, supported firmware, and the appropriate runtime body-sensor permission. Emulator and non-Samsung watch testing cannot validate the hardware path.
 
 The SDK archive's announcement and license text is included at `licenses/samsung-health-sensor-sdk-1.4.1-Announcement.txt`. Review it before redistribution.
 

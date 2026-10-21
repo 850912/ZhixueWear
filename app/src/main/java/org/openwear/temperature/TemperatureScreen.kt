@@ -3,7 +3,6 @@ package org.openwear.temperature
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,12 +20,21 @@ import androidx.wear.compose.material3.Text
 internal fun TemperatureScreen(
     result: MeasurementResult,
     mode: MeasurementMode,
+    trendRange: TrendRange,
     history: List<Pair<Long, Float>>,
     permissionMessage: String,
     onModeChanged: (MeasurementMode) -> Unit,
+    onTrendRangeChanged: (TrendRange) -> Unit,
     onMeasure: () -> Unit
 ) {
     val listState = rememberTransformingLazyColumnState()
+    val now = System.currentTimeMillis()
+    val filtered = history.filter { (t, _) -> now - t <= trendRange.millis }
+    val values = filtered.map { it.second }
+    val trendMean = if (values.isNotEmpty()) values.average().toFloat() else null
+    val trendMin = values.minOrNull()
+    val trendMax = values.maxOrNull()
+
     ScreenScaffold(scrollState = listState) { contentPadding ->
         TransformingLazyColumn(
             state = listState,
@@ -86,19 +94,28 @@ internal fun TemperatureScreen(
                 }
             }
             item {
-                Text("个人近期趋势", fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                Text("个人趋势 · ${trendRange.label}", fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
             }
-            if (history.isEmpty()) {
-                item { Text("暂无历史记录", textAlign = TextAlign.Center) }
-            } else {
-                history.takeLast(5).reversed().forEach { (time, value) ->
+            item {
+                RowRangeButtons(trendRange, onTrendRangeChanged)
+            }
+            if (filtered.isNotEmpty()) {
+                item {
+                    Text(
+                        "样本 ${filtered.size} · 均值 ${"%.1f°".format(trendMean)} · 范围 ${"%.1f".format(trendMin)}–${"%.1f°".format(trendMax)}",
+                        textAlign = TextAlign.Center
+                    )
+                }
+                filtered.takeLast(8).reversed().forEach { (time, value) ->
                     item {
                         Text(
-                            "${formatTime(time)}  %.1f°".format(value),
+                            "${formatTime(time)}  ${"%.1f°".format(value)}",
                             textAlign = TextAlign.Center
                         )
                     }
                 }
+            } else {
+                item { Text("该时段暂无历史记录", textAlign = TextAlign.Center) }
             }
             item {
                 Text("静坐、贴合佩戴；运动、洗澡或温差环境后等待 30 分钟。", textAlign = TextAlign.Center)
@@ -122,6 +139,23 @@ private fun RowModeButtons(mode: MeasurementMode, onModeChanged: (MeasurementMod
                 modifier = Modifier.weight(1f)
             ) {
                 Text(if (m == mode) "✓ ${m.label}" else m.label)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowRangeButtons(range: TrendRange, onRangeChanged: (TrendRange) -> Unit) {
+    androidx.compose.foundation.layout.Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        TrendRange.values().forEach { r ->
+            Button(
+                onClick = { onRangeChanged(r) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(if (r == range) "✓ ${r.label}" else r.label)
             }
         }
     }

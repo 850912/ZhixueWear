@@ -2,7 +2,14 @@ package org.openwear.temperature
 
 internal enum class MeasurementMode(val label: String, val estimatedSeconds: Int) {
     QUICK("快速测量", 25),
-    ACCURATE("准确测量", 65)
+    ACCURATE("准确测量", 105)
+}
+
+internal enum class TrendRange(val label: String, val millis: Long) {
+    HOUR("1小时", 3_600_000L),
+    DAY("1天", 86_400_000L),
+    WEEK("1周", 604_800_000L),
+    MONTH("1月", 2_592_000_000L)
 }
 
 internal object TemperatureQuality {
@@ -11,12 +18,12 @@ internal object TemperatureQuality {
 
     fun minSamples(mode: MeasurementMode): Int = when (mode) {
         MeasurementMode.QUICK -> 1
-        MeasurementMode.ACCURATE -> 3
+        MeasurementMode.ACCURATE -> 5
     }
 
     fun timeoutMs(mode: MeasurementMode): Long = when (mode) {
         MeasurementMode.QUICK -> 30_000L
-        MeasurementMode.ACCURATE -> 65_000L
+        MeasurementMode.ACCURATE -> 105_000L
     }
 
     fun summarize(samples: List<TemperatureSample>, mode: MeasurementMode): MeasurementResult? {

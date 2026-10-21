@@ -153,7 +153,12 @@ internal fun TemperatureScreen(
                 textAlign = TextAlign.Center
             )
 
-            SubText(text = "腕部皮肤温度", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = "腕部皮肤温度",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 

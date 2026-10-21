@@ -386,13 +386,13 @@ private fun formatTime(millis: Long): String {
 @Composable
 private fun WearStatusCard(wearState: WearState) {
     val cardColor = when {
-        !wearState.isWearing -> MaterialTheme.colorScheme.errorContainer
-        wearState.isMoving -> MaterialTheme.colorScheme.warningContainer
-        else -> MaterialTheme.colorScheme.secondaryContainer
+        !wearState.isWearing -> Color(0xFF442222) // 深红
+        wearState.isMoving -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainer
     }
     val contentColor = when {
-        !isWearing(wearState) -> MaterialTheme.colorScheme.onErrorContainer
-        wearState.isMoving -> MaterialTheme.colorScheme.onWarningContainer
+        !wearState.isWearing -> MaterialTheme.colorScheme.onErrorContainer
+        wearState.isMoving -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.onSecondaryContainer
     }
     val text = when {
@@ -424,5 +424,3 @@ private fun WearStatusCard(wearState: WearState) {
         }
     }
 }
-
-private fun isWearing(ws: WearState): Boolean = ws.isWearing

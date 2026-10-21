@@ -37,7 +37,8 @@ android {
         release {
             minifyEnabled false
             shrinkResources false
-            if (hasSigning) signingConfig signingConfigs.release
+            // 未提供签名密钥时回退到 debug 签名，保证 CI 产出的 release APK 可直接安装
+            signingConfig hasSigning ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {

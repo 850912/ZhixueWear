@@ -1,9 +1,11 @@
-name: Build Android APK
+name: Build Wear OS APK
+
 on:
   push:
     branches: [ "main", "master" ]
   pull_request:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,11 +16,15 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: gradle
-      - uses: android-actions/setup-android@v3
-      - name: Install SDK 35
+      - name: Install Android SDK
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          mkdir -p /usr/local/lib/android/sdk
+          cd /usr/local/lib/android/sdk
+          curl -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools cmdline-tools-latest
+          yes | ./cmdline-tools-latest/bin/sdkmanager --licenses
+          ./cmdline-tools-latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Run Unit Tests and Assemble Debug APK
         run: |
           chmod +x ./gradlew

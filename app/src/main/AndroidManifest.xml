@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:name="android.hardware.type.watch" android:required="true" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+
+    <!-- Wear OS 35+ 皮肤温度权限 -->
+    <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE" />
+    <!-- 通用身体传感器权限（兼容旧设备） -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <!-- 三星专有健康数据权限 -->
+    <uses-permission android:name="com.samsung.android.hardware.sensormanager.permission.READ_ADDITIONAL_HEALTH_DATA" />
+    <!-- 活动识别，用于运动检测 -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <queries>
+        <package android:name="com.samsung.android.service.health" />
+        <intent>
+            <action android:name="com.samsung.android.service.health.wear.sts.ACTION_SERVICE" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:label="腕部皮肤温度"
+        android:theme="@style/AppTheme">
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="true" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -13,7 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.MaterialTheme
-import androidx.wear.compose.material3.Surface
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -57,6 +56,7 @@ class MainActivity : ComponentActivity() {
                 it.getFloat(KEY_MEAN, Float.NaN).takeUnless(Float::isNaN),
                 it.getFloat(KEY_OBJECT, Float.NaN).takeUnless(Float::isNaN),
                 it.getFloat(KEY_AMBIENT, Float.NaN).takeUnless(Float::isNaN),
+                it.getFloat(KEY_SPREAD, Float.NaN).takeUnless(Float::isNaN),
                 it.getInt(KEY_COUNT, 0),
                 runCatching { MeasurementStatus.valueOf(it.getString(KEY_STATUS
                     ?: MeasurementStatus.IDLE.name)) }.getOrDefault(MeasurementStatus.IDLE),
@@ -75,10 +75,7 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             MaterialTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
+                AppScaffold {
                     TemperatureScreen(
                         result = result,
                         mode = mode,
@@ -101,6 +98,7 @@ class MainActivity : ComponentActivity() {
         outState.putFloat(KEY_MEAN, result.meanCelsius ?: Float.NaN)
         outState.putFloat(KEY_OBJECT, result.objectCelsius ?: Float.NaN)
         outState.putFloat(KEY_AMBIENT, result.ambientCelsius ?: Float.NaN)
+        outState.putFloat(KEY_SPREAD, result.spreadCelsius ?: Float.NaN)
         outState.putInt(KEY_COUNT, result.sampleCount)
         outState.putString(KEY_STATUS, result.status.name)
         outState.putString(KEY_DETAIL, result.detail)

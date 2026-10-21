@@ -44,7 +44,6 @@ internal object TemperatureQuality {
         val meanObject = objectValues.average().toFloat()
         val meanAmbient = ambientValues.average().toFloat()
         val skinSpread = skinValues.max() - skinValues.min()
-        val objectSpread = objectValues.max() - objectValues.min()
 
         return when (mode) {
             MeasurementMode.QUICK -> MeasurementResult(
@@ -85,5 +84,5 @@ internal object TemperatureQuality {
             skinCelsius in MIN_SKIN_CELSIUS..MAX_SKIN_CELSIUS &&
             ambientCelsius in MIN_AMBIENT_CELSIUS..MAX_AMBIENT_CELSIUS &&
             objectCelsius in MIN_OBJECT_CELSIUS..MAX_OBJECT_CELSIUS &&
-            skinCelsius > ambientCelsius + 1.0f  // 皮肤温度应高于环境温度，否则可能未贴合
+            skinCelsius > ambientCelsius + 1.0f // 皮肤温度应高于环境温度，否则可能未贴合
 }

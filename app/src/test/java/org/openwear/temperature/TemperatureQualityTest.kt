@@ -10,9 +10,15 @@ import org.junit.Test
 class TemperatureQualityTest {
     @Test
     fun acceptsFiniteInRangeSamples() {
-        assertTrue(TemperatureQuality.isValidSample(34.2f, 24.0f))
-        assertFalse(TemperatureQuality.isValidSample(Float.NaN, 24.0f))
-        assertFalse(TemperatureQuality.isValidSample(46.0f, 24.0f))
+        assertTrue(TemperatureQuality.isValidSample(34.2f, 24.0f, 34.0f))
+        assertFalse(TemperatureQuality.isValidSample(Float.NaN, 24.0f, 34.0f))
+        assertFalse(TemperatureQuality.isValidSample(46.0f, 24.0f, 34.0f))
+        assertFalse(TemperatureQuality.isValidSample(34.2f, 24.0f, 99.0f))
+    }
+
+    @Test
+    fun rejectsSampleWhenSkinIsNotAboveAmbient() {
+        assertFalse(TemperatureQuality.isValidSample(23.0f, 24.0f, 23.0f))
     }
 
     @Test
@@ -25,9 +31,9 @@ class TemperatureQualityTest {
     }
 
     @Test
-    fun accurateModeRequiresThreeStableSamples() {
-        val two = samples(listOf(34.0f, 34.1f))
-        assertNull(TemperatureQuality.summarize(two, MeasurementMode.ACCURATE))
+    fun accurateModeRequiresFiveStableSamples() {
+        val four = samples(listOf(34.0f, 34.1f, 34.2f, 34.1f))
+        assertNull(TemperatureQuality.summarize(four, MeasurementMode.ACCURATE))
 
         val five = samples(listOf(34.0f, 34.1f, 34.2f, 34.1f, 34.0f))
         val result = TemperatureQuality.summarize(five, MeasurementMode.ACCURATE)
@@ -48,6 +54,6 @@ class TemperatureQualityTest {
     }
 
     private fun samples(values: List<Float>) = values.mapIndexed { index, value ->
-        TemperatureSample(value, 24.0f, index.toLong())
+        TemperatureSample(value, 24.0f, value, index.toLong())
     }
 }

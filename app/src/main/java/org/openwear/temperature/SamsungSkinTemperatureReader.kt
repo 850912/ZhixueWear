@@ -15,6 +15,7 @@ import com.samsung.android.service.health.tracking.data.ValueKey
 internal data class TemperatureSample(
     val skinCelsius: Float,
     val ambientCelsius: Float,
+    val objectCelsius: Float,
     val timestampMillis: Long
 )
 
@@ -32,7 +33,9 @@ internal data class WearState(
 )
 
 internal data class MeasurementResult(
-    val meanCelsius: Float?,
+    val skinCelsius: Float?,
+    val objectCelsius: Float?,
+    val ambientCelsius: Float?,
     val spreadCelsius: Float?,
     val sampleCount: Int,
     val status: MeasurementStatus,
@@ -86,10 +89,16 @@ internal class SamsungSkinTemperatureReader(
     // 运动检测：加速度变化超过此值判定为运动
     private const val MOTION_THRESHOLD = 0.15f
 
+    // 电量优化：采样间隔（毫秒），避免过于频繁唤醒 CPU
+    private const val SAMPLE_INTERVAL_MS = 2000L
+
+    private var lastSampleTime = 0L
+
     fun start() {
         stop()
         samples.clear()
         motionSamples.clear()
+        lastSampleTime = 0
         active = true
         emit(MeasurementStatus.CONNECTING, "正在连接三星 Health Sensor Service…")
         timeout = Runnable {
@@ -134,30 +143,30 @@ internal class SamsungSkinTemperatureReader(
     private val connectionListener = object : ConnectionListener {
         override fun onConnectionSuccess() {
             mainHandler.post {
-            if (!active) return@post
-            val current = service ?: return@post
-            val supported = runCatching { current.trackingCapability.supportHealthTrackerTypes }
-                .getOrElse {
-                    finish(MeasurementStatus.ERROR, "读取传感器能力失败：${it.javaClass.simpleName}")
+                if (!active) return@post
+                val current = service ?: return@post
+                val supported = runCatching { current.trackingCapability.supportHealthTrackerTypes }
+                    .getOrElse {
+                        finish(MeasurementStatus.ERROR, "读取传感器能力失败：${it.javaClass.simpleName}")
+                        return@post
+                    }
+                // 检查皮肤温度 tracker（按需模式）
+                if (!supported.contains(HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND)) {
+                    finish(MeasurementStatus.UNSUPPORTED, "Health Platform 已连接，但当前手表未提供按需皮肤温度传感器")
                     return@post
                 }
-            // 检查皮肤温度 tracker
-            if (!supported.contains(HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND)) {
-                finish(MeasurementStatus.UNSUPPORTED, "Health Platform 已连接，但当前手表未提供按需皮肤温度传感器")
-                return@post
-            }
-            try {
-                skinTracker = current.getHealthTracker(HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND)
-                skinTracker?.setEventListener(skinTrackerListener)
-                    ?: finish(MeasurementStatus.ERROR, "SDK 未返回皮肤温度 tracker")
-                if (active) emit(MeasurementStatus.MEASURING, "传感器已启动，等待有效样本…")
-            } catch (error: SecurityException) {
-                finish(MeasurementStatus.PERMISSION_DENIED, "三星 Health Sensor SDK 权限被拒绝")
-            } catch (error: UnsupportedOperationException) {
-                finish(MeasurementStatus.UNSUPPORTED, error.message ?: "当前设备不支持按需皮肤温度")
-            } catch (error: Throwable) {
-                finish(MeasurementStatus.ERROR, "创建温度 tracker 失败：${error.message ?: error.javaClass.simpleName}")
-            }
+                try {
+                    skinTracker = current.getHealthTracker(HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND)
+                    skinTracker?.setEventListener(skinTrackerListener)
+                        ?: finish(MeasurementStatus.ERROR, "SDK 未返回皮肤温度 tracker")
+                    if (active) emit(MeasurementStatus.MEASURING, "传感器已启动，等待有效样本…")
+                } catch (error: SecurityException) {
+                    finish(MeasurementStatus.PERMISSION_DENIED, "三星 Health Sensor SDK 权限被拒绝")
+                } catch (error: UnsupportedOperationException) {
+                    finish(MeasurementStatus.UNSUPPORTED, error.message ?: "当前设备不支持按需皮肤温度")
+                } catch (error: Throwable) {
+                    finish(MeasurementStatus.ERROR, "创建温度 tracker 失败：${error.message ?: error.javaClass.simpleName}")
+                }
             }
         }
 
@@ -169,18 +178,18 @@ internal class SamsungSkinTemperatureReader(
 
         override fun onConnectionFailed(exception: HealthTrackerException) {
             mainHandler.post {
-            val code = exception.errorCode
-            val status = when (code) {
-                HealthTrackerException.PACKAGE_NOT_INSTALLED -> MeasurementStatus.SERVICE_MISSING
-                HealthTrackerException.OLD_PLATFORM_VERSION -> MeasurementStatus.SERVICE_OLD
-                else -> MeasurementStatus.CONNECTION_FAILED
-            }
-            val hint = when (status) {
-                MeasurementStatus.SERVICE_MISSING -> "未安装三星 Health Platform / Sensor Service"
-                MeasurementStatus.SERVICE_OLD -> "Health Platform 版本过旧，请从 Galaxy Store 更新"
-                else -> "连接失败（SDK 错误码 $code）：${exception.message ?: "请确认设备和 Health Platform"}"
-            }
-            finish(status, hint)
+                val code = exception.errorCode
+                val status = when (code) {
+                    HealthTrackerException.PACKAGE_NOT_INSTALLED -> MeasurementStatus.SERVICE_MISSING
+                    HealthTrackerException.OLD_PLATFORM_VERSION -> MeasurementStatus.SERVICE_OLD
+                    else -> MeasurementStatus.CONNECTION_FAILED
+                }
+                val hint = when (status) {
+                    MeasurementStatus.SERVICE_MISSING -> "未安装三星 Health Platform / Sensor Service"
+                    MeasurementStatus.SERVICE_OLD -> "Health Platform 版本过旧，请从 Galaxy Store 更新"
+                    else -> "连接失败（SDK 错误码 $code）：${exception.message ?: "请确认设备和 Health Platform"}"
+                }
+                finish(status, hint)
             }
         }
     }
@@ -188,29 +197,34 @@ internal class SamsungSkinTemperatureReader(
     private val skinTrackerListener = object : HealthTracker.TrackerEventListener {
         override fun onDataReceived(dataPoints: List<DataPoint>) {
             mainHandler.post {
-            if (!active) return@post
-            for (point in dataPoints) {
-                val skin = point.getValue(ValueKey.SkinTemperatureSet.OBJECT_TEMPERATURE)
-                val ambient = point.getValue(ValueKey.SkinTemperatureSet.AMBIENT_TEMPERATURE)
-                val sampleStatus = point.getValue(ValueKey.SkinTemperatureSet.STATUS)
-                if (sampleStatus != null && sampleStatus != 0) {
-                    finish(MeasurementStatus.ERROR, "三星传感器报告温度数据错误（状态 $sampleStatus），请清洁传感器并确保与皮肤接触")
-                    return@post
+                if (!active) return@post
+                val now = System.currentTimeMillis()
+                // 电量优化：限制采样频率，避免过于频繁处理
+                if (now - lastSampleTime < SAMPLE_INTERVAL_MS) return@post
+                lastSampleTime = now
+
+                for (point in dataPoints) {
+                    val skin = point.getValue(ValueKey.SkinTemperatureSet.OBJECT_TEMPERATURE)
+                    val ambient = point.getValue(ValueKey.SkinTemperatureSet.AMBIENT_TEMPERATURE)
+                    val objectTemp = point.getValue(ValueKey.SkinTemperatureSet.OBJECT_TEMPERATURE)
+                    val sampleStatus = point.getValue(ValueKey.SkinTemperatureSet.STATUS)
+                    if (sampleStatus != null && sampleStatus != 0) {
+                        finish(MeasurementStatus.ERROR, "三星传感器报告温度数据错误（状态 $sampleStatus），请清洁传感器并确保与皮肤接触")
+                        return@post
+                    }
+                    if (skin != null && ambient != null && TemperatureQuality.isValidSample(skin, ambient)) {
+                        samples += TemperatureSample(skin, ambient, objectTemp ?: skin, point.timestamp)
+                        lastWearState = lastWearState.copy(isWearing = true)
+                    } else if (skin != null && skin < TemperatureQuality.MIN_SKIN_CELSIUS) {
+                        lastWearState = lastWearState.copy(isWearing = false, reason = "皮肤温度过低，可能未佩戴")
+                    }
                 }
-                if (skin != null && ambient != null && TemperatureQuality.isValidSample(skin, ambient)) {
-                    samples += TemperatureSample(skin, ambient, point.timestamp)
-                    lastWearState = lastWearState.copy(isWearing = true)
-                } else if (skin != null && skin < TemperatureQuality.MIN_SKIN_CELSIUS) {
-                    // 读数过低，可能未佩戴
-                    lastWearState = lastWearState.copy(isWearing = false, reason = "皮肤温度过低，可能未佩戴")
+                TemperatureQuality.summarize(samples, mode)?.let { summary ->
+                    finish(summary.status, summary.detail, summary.meanCelsius, summary.spreadCelsius)
                 }
-            }
-            TemperatureQuality.summarize(samples, mode)?.let { summary ->
-                finish(summary.status, summary.detail, summary.meanCelsius, summary.spreadCelsius)
-            }
-            if (samples.size >= TemperatureQuality.MAX_SAMPLES) {
-                finish(MeasurementStatus.UNSTABLE, "收到样本但波动仍较大；请静坐、贴合佩戴后重试")
-            }
+                if (samples.size >= TemperatureQuality.MAX_SAMPLES) {
+                    finish(MeasurementStatus.UNSTABLE, "收到样本但波动仍较大；请静坐、贴合佩戴后重试")
+                }
             }
         }
 
@@ -218,38 +232,38 @@ internal class SamsungSkinTemperatureReader(
 
         override fun onError(error: HealthTracker.TrackerError) {
             mainHandler.post {
-            val status = when (error) {
-                HealthTracker.TrackerError.PERMISSION_ERROR -> MeasurementStatus.PERMISSION_DENIED
-                HealthTracker.TrackerError.SDK_POLICY_ERROR -> MeasurementStatus.SDK_POLICY
-                else -> MeasurementStatus.ERROR
-            }
-            val hint = when (status) {
-                MeasurementStatus.PERMISSION_DENIED -> "三星传感器授权被拒绝。请检查系统权限并重新授权"
-                MeasurementStatus.SDK_POLICY -> "三星 SDK 策略拒绝此请求；请确认已加入健康研究并启用平台开发者模式"
-                else -> "温度 tracker 错误：$error"
-            }
-            finish(status, hint)
+                val status = when (error) {
+                    HealthTracker.TrackerError.PERMISSION_ERROR -> MeasurementStatus.PERMISSION_DENIED
+                    HealthTracker.TrackerError.SDK_POLICY_ERROR -> MeasurementStatus.SDK_POLICY
+                    else -> MeasurementStatus.ERROR
+                }
+                val hint = when (status) {
+                    MeasurementStatus.PERMISSION_DENIED -> "三星传感器授权被拒绝。请检查系统权限并重新授权"
+                    MeasurementStatus.SDK_POLICY -> "三星 SDK 策略拒绝此请求；请确认已加入健康研究并启用平台开发者模式"
+                    else -> "温度 tracker 错误：$error"
+                }
+                finish(status, hint)
             }
         }
     }
 
-    // 运动检测 tracker
+    // 运动检测 tracker（仅在测量期间启用，节省电量）
     private val motionTrackerListener = object : HealthTracker.TrackerEventListener {
         override fun onDataReceived(dataPoints: List<DataPoint>) {
             mainHandler.post {
-            if (!active) return@post
-            for (point in dataPoints) {
-                val x = point.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_X)
-                val y = point.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_Y)
-                val z = point.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_Z)
-                if (x != null && y != null && z != null) {
-                    motionSamples += MotionSample(x, y, z, point.timestamp)
-                    // 只保留最近 20 个样本用于运动判断
-                    if (motionSamples.size > 20) motionSamples.removeAt(0)
-                    updateMotionState()
+                if (!active) return@post
+                for (point in dataPoints) {
+                    val x = point.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_X)
+                    val y = point.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_Y)
+                    val z = point.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_Z)
+                    if (x != null && y != null && z != null) {
+                        motionSamples += MotionSample(x, y, z, point.timestamp)
+                        if (motionSamples.size > 20) motionSamples.removeAt(0)
+                        updateMotionState()
+                    }
                 }
             }
-            }
+        }
 
         override fun onFlushCompleted() = Unit
 
@@ -290,7 +304,7 @@ internal class SamsungSkinTemperatureReader(
         spread: Float? = null,
         count: Int = samples.size
     ) {
-        onResult(MeasurementResult(mean, spread, count, status, detail))
+        onResult(MeasurementResult(mean, spread, samples.size, status, detail))
     }
 
     companion object {

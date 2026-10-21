@@ -20,7 +20,7 @@ import org.json.JSONObject
 class MainActivity : ComponentActivity() {
     private var reader: SamsungSkinTemperatureReader? = null
     private var result by mutableStateOf(
-        MeasurementResult(null, null, 0, MeasurementStatus.IDLE, "准备测量腕部皮肤温度")
+        MeasurementResult(null, null, null, 0, MeasurementStatus.IDLE, "准备测量腕部皮肤温度")
     )
     private var mode by mutableStateOf(MeasurementMode.ACCURATE)
     private var history by mutableStateOf(loadHistory())
@@ -55,7 +55,8 @@ class MainActivity : ComponentActivity() {
         savedInstanceState?.let {
             result = MeasurementResult(
                 it.getFloat(KEY_MEAN, Float.NaN).takeUnless(Float::isNaN),
-                it.getFloat(KEY_SPREAD, Float.NaN).takeUnless(Float::isNaN),
+                it.getFloat(KEY_OBJECT, Float.NaN).takeUnless(Float::isNaN),
+                it.getFloat(KEY_AMBIENT, Float.NaN).takeUnless(Float::isNaN),
                 it.getInt(KEY_COUNT, 0),
                 runCatching { MeasurementStatus.valueOf(it.getString(KEY_STATUS
                     ?: MeasurementStatus.IDLE.name)) }.getOrDefault(MeasurementStatus.IDLE),
@@ -98,7 +99,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putFloat(KEY_MEAN, result.meanCelsius ?: Float.NaN)
-        outState.putFloat(KEY_SPREAD, result.spreadCelsius ?: Float.NaN)
+        outState.putFloat(KEY_OBJECT, result.objectCelsius ?: Float.NaN)
+        outState.putFloat(KEY_AMBIENT, result.ambientCelsius ?: Float.NaN)
         outState.putInt(KEY_COUNT, result.sampleCount)
         outState.putString(KEY_STATUS, result.status.name)
         outState.putString(KEY_DETAIL, result.detail)
@@ -127,7 +129,7 @@ class MainActivity : ComponentActivity() {
 
     private fun startAutoMeasure() {
         reader?.stop()
-        result = MeasurementResult(null, null, 0, MeasurementStatus.IDLE, "准备测量腕部皮肤温度")
+        result = MeasurementResult(null, null, null, 0, MeasurementStatus.IDLE, "准备测量腕部皮肤温度")
         reader = SamsungSkinTemperatureReader(this, mode) { r ->
             result = r
             if (r.meanCelsius != null) saveHistory(r.meanCelsius!!)
@@ -161,7 +163,8 @@ class MainActivity : ComponentActivity() {
         const val PREFS = "temperature_history"
         const val KEY_ROWS = "rows"
         const val KEY_MEAN = "mean"
-        const val KEY_SPREAD = "spread"
+        const val KEY_OBJECT = "object"
+        const val KEY_AMBIENT = "ambient"
         const val KEY_COUNT = "count"
         const val KEY_STATUS = "status"
         const val KEY_DETAIL = "detail"

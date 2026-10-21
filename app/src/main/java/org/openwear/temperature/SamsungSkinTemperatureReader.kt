@@ -59,7 +59,7 @@ internal class SamsungSkinTemperatureReader(
         active = true
         emit(MeasurementStatus.CONNECTING, "正在连接三星 Health Sensor Service…")
         timeout = Runnable {
-            finish(MeasurementStatus.TIMEOUT, "120 秒内未收到稳定皮肤温度样本。请确认手表贴合手腕后重试")
+            finish(MeasurementStatus.TIMEOUT, "60 秒内未收到稳定皮肤温度样本。请确认手表贴合手腕后重试")
         }.also { mainHandler.postDelayed(it, MEASUREMENT_TIMEOUT_MS) }
         try {
             service = HealthTrackingService(connectionListener, appContext).also { it.connectService() }
@@ -200,6 +200,6 @@ internal class SamsungSkinTemperatureReader(
     }
 
     companion object {
-        private const val MEASUREMENT_TIMEOUT_MS = 120_000L
+        private const val MEASUREMENT_TIMEOUT_MS = 60_000L
     }
 }

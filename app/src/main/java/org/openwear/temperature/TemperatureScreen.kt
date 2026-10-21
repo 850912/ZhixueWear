@@ -95,7 +95,6 @@ internal fun TemperatureScreen(
     onMeasure: () -> Unit
 ) {
     val listState = rememberTransformingLazyColumnState()
-    val transformationSpec = rememberTransformationSpec()
 
     val now = System.currentTimeMillis()
     val filtered = history.filter { (t, _) -> now - t <= trendRange.millis }

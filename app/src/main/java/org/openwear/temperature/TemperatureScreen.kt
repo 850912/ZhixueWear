@@ -1,32 +1,84 @@
 package org.openwear.temperature
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumnDefaults
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
+import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonDefaults
+import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.Card
-import androidx.wear.compose.material3.HorizontalDivider
+import androidx.wear.compose.material3.CardDefaults
+import androidx.wear.compose.material3.CircularProgressIndicator
+import androidx.wear.compose.material3.EdgeButton
+import androidx.wear.compose.material3.EdgeButtonSize
+import androidx.wear.compose.material3.FilledTonalButton
+import androidx.wear.compose.material3.LinearProgressIndicator
+import androidx.wear.compose.material3.ListHeader
+import androidx.wear.compose.material3.ListHeaderDefaults
 import androidx.wear.compose.material3.MaterialTheme
-import androidx.wear.compose.material3.OutlinedTextField
+import androidx.wear.compose.material3.OutlinedCard
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Switch
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.TextButton
+import androidx.wear.compose.material3.TitleCard
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 
 @Composable
 internal fun TemperatureScreen(
@@ -51,6 +103,26 @@ internal fun TemperatureScreen(
     val trendMin = values.minOrNull()
     val trendMax = values.maxOrNull()
 
+    val isActiveMeasuring = result.status == MeasurementStatus.CONNECTING ||
+        result.status == MeasurementStatus.MEASURING
+    val minRequiredSamples = TemperatureQuality.minSamples(mode).coerceAtLeast(1)
+    val rawProgress = when (result.status) {
+        MeasurementStatus.IDLE -> 0f
+        MeasurementStatus.CONNECTING -> 0.18f
+        MeasurementStatus.MEASURING -> (result.sampleCount.toFloat() / minRequiredSamples.toFloat())
+            .coerceIn(0.22f, 0.95f)
+        MeasurementStatus.COMPLETE -> 1f
+        else -> 0f
+    }
+    val animatedArcProgress by animateFloatAsState(
+        targetValue = rawProgress,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "m3eBezelArcProgress"
+    )
+
     ScreenScaffold(
         scrollState = listState,
         modifier = Modifier.fillMaxSize()
@@ -62,7 +134,7 @@ internal fun TemperatureScreen(
                 .verticalArrangement(Arrangement.spacedBy(6.dp)),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 标题
+            // 大标题：皮肤温度
             Text(
                 text = "皮肤温度",
                 style = MaterialTheme.typography.titleLarge,
@@ -72,7 +144,7 @@ internal fun TemperatureScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 主读数
+            // 主读数区域
             Text(
                 text = result.meanCelsius?.let { "%.1f°".format(it) } ?: "--°",
                 style = MaterialTheme.typography.headlineMedium,
@@ -81,12 +153,28 @@ internal fun TemperatureScreen(
                 textAlign = TextAlign.Center
             )
 
-            Text(
-                text = "腕部皮肤温度 · 非核心体温",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+            SubText(text = "腕部皮肤温度", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 环境温度与物体温度小卡片
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TempChip(
+                    label = "环境",
+                    value = result.ambientCelsius?.let { "%.1f°".format(it) } ?: "--°",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                TempChip(
+                    label = "物体",
+                    value = result.objectCelsius?.let { "%.1f°".format(it) } ?: "--°",
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -98,6 +186,8 @@ internal fun TemperatureScreen(
                 fontWeight = FontWeight.Medium,
                 color = statusColor(result.status)
             )
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             if (result.meanCelsius != null) {
                 Text(
@@ -120,7 +210,7 @@ internal fun TemperatureScreen(
                     text = when {
                         wearState.isMoving -> "请保持静息后测量"
                         !wearState.isWearing -> "请贴合佩戴手表"
-                        result.status == MeasurementStatus.MEASURING -> "重新${mode.label}"
+                        isActiveMeasuring -> "重新${mode.label}"
                         else -> "开始${mode.label}"
                     },
                     style = MaterialTheme.typography.labelLarge,
@@ -234,7 +324,7 @@ internal fun TemperatureScreen(
                 style = MaterialTheme.typography.bodyExtraSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 3,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -243,7 +333,7 @@ internal fun TemperatureScreen(
 }
 
 @Composable
-private fun TempChip(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
+private fun TempChip(label: String, value: String, color: Color) {
     Card(
         modifier = Modifier.weight(1f),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
@@ -355,7 +445,7 @@ private fun statusLabel(status: MeasurementStatus): String = when (status) {
     MeasurementStatus.MOVING -> "手腕运动中"
 }
 
-private fun statusColor(status: MeasurementStatus): androidx.compose.ui.graphics.Color {
+private fun statusColor(status: MeasurementStatus): Color {
     return when (status) {
         MeasurementStatus.IDLE -> Color(0xFF667777)
         MeasurementStatus.CONNECTING -> MaterialTheme.colorScheme.primary
@@ -384,10 +474,9 @@ private fun formatTime(millis: Long): String {
 }
 
 @Composable
-@Composable
 private fun WearStatusCard(wearState: WearState) {
     val cardColor = when {
-        !wearState.isWearing -> Color(0xFF442222) // 深红 - 未佩戴
+        !wearState.isWearing -> Color(0xFF442222) // 深红
         wearState.isMoving -> MaterialTheme.colorScheme.surfaceContainer
         else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }

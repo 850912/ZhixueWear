@@ -1,7 +1,7 @@
 package org.openwear.temperature
 
 internal object TemperatureQuality {
-    const val MIN_SAMPLES = 5
+    const val MIN_SAMPLES = 3
     const val MAX_SAMPLES = 30
     const val MAX_STABLE_SPREAD_C = 0.4f
 

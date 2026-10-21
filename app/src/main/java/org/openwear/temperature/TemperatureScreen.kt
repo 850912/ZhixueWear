@@ -357,21 +357,21 @@ private fun statusLabel(status: MeasurementStatus): String = when (status) {
 
 private fun statusColor(status: MeasurementStatus): androidx.compose.ui.graphics.Color {
     return when (status) {
-        MeasurementStatus.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant
+        MeasurementStatus.IDLE -> Color(0xFF667777)
         MeasurementStatus.CONNECTING -> MaterialTheme.colorScheme.primary
         MeasurementStatus.MEASURING -> MaterialTheme.colorScheme.primary
         MeasurementStatus.COMPLETE -> MaterialTheme.colorScheme.primaryContainer
-        MeasurementStatus.UNSTABLE -> MaterialTheme.colorScheme.warningContainer
+        MeasurementStatus.UNSTABLE -> Color(0xFFFFCC00)
         MeasurementStatus.SERVICE_MISSING -> MaterialTheme.colorScheme.errorContainer
         MeasurementStatus.SERVICE_OLD -> MaterialTheme.colorScheme.errorContainer
         MeasurementStatus.CONNECTION_FAILED -> MaterialTheme.colorScheme.errorContainer
         MeasurementStatus.UNSUPPORTED -> MaterialTheme.colorScheme.errorContainer
         MeasurementStatus.PERMISSION_DENIED -> MaterialTheme.colorScheme.errorContainer
         MeasurementStatus.SDK_POLICY -> MaterialTheme.colorScheme.errorContainer
-        MeasurementStatus.TIMEOUT -> MaterialTheme.colorScheme.warningContainer
+        MeasurementStatus.TIMEOUT -> Color(0xFFFFCC00)
         MeasurementStatus.ERROR -> MaterialTheme.colorScheme.errorContainer
-        MeasurementStatus.NOT_WEARING -> MaterialTheme.colorScheme.warningContainer
-        MeasurementStatus.MOVING -> MaterialTheme.colorScheme.warningContainer
+        MeasurementStatus.NOT_WEARING -> Color(0xFFFFCC00)
+        MeasurementStatus.MOVING -> Color(0xFFFFCC00)
     }
 }
 
@@ -384,16 +384,17 @@ private fun formatTime(millis: Long): String {
 }
 
 @Composable
+@Composable
 private fun WearStatusCard(wearState: WearState) {
     val cardColor = when {
-        !wearState.isWearing -> Color(0xFF442222) // 深红
-        wearState.isMoving -> MaterialTheme.colorScheme.secondaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainer
+        !wearState.isWearing -> Color(0xFF442222) // 深红 - 未佩戴
+        wearState.isMoving -> MaterialTheme.colorScheme.surfaceContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val contentColor = when {
-        !wearState.isWearing -> MaterialTheme.colorScheme.onErrorContainer
+        !wearState.isWearing -> MaterialTheme.colorScheme.onSurfaceVariant
         wearState.isMoving -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
     }
     val text = when {
         !wearState.isWearing -> "未佩戴手表"
@@ -403,7 +404,7 @@ private fun WearStatusCard(wearState: WearState) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = cardColor)
+        color = cardColor
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),

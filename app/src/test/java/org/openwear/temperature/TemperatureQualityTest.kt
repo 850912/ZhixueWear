@@ -9,30 +9,39 @@ import org.junit.Test
 
 class TemperatureQualityTest {
     @Test
-    fun acceptsFiniteInRangeSamplesWithPositiveAccuracy() {
+    fun acceptsFiniteInRangeSamples() {
         assertTrue(TemperatureQuality.isValidSample(34.2f, 24.0f))
         assertFalse(TemperatureQuality.isValidSample(Float.NaN, 24.0f))
         assertFalse(TemperatureQuality.isValidSample(46.0f, 24.0f))
     }
 
     @Test
-    fun requiresFiveSamplesAndReportsStableSkinTemperatureOnly() {
-        val two = samples(listOf(34.0f, 34.1f))
-        assertNull(TemperatureQuality.summarize(two))
-
-        val three = samples(listOf(34.0f, 34.1f, 34.2f))
-        val result = TemperatureQuality.summarize(three)
+    fun quickModeReturnsFirstValidSample() {
+        val one = samples(listOf(34.0f))
+        val result = TemperatureQuality.summarize(one, MeasurementMode.QUICK)
         assertNotNull(result)
-        assertEquals(34.1f, result!!.meanCelsius!!, 0.01f)
-        assertEquals(0.2f, result.spreadCelsius!!, 0.001f)
-        assertTrue(result.detail.contains("不代表核心体温"))
+        assertEquals(34.0f, result!!.meanCelsius!!, 0.001f)
+        assertTrue(result.detail.contains("快速测量"))
     }
 
     @Test
-    fun unstableMeasurementNeverReturnsAValueAsIfItWereReliable() {
+    fun accurateModeRequiresThreeStableSamples() {
+        val two = samples(listOf(34.0f, 34.1f))
+        assertNull(TemperatureQuality.summarize(two, MeasurementMode.ACCURATE))
+
+        val three = samples(listOf(34.0f, 34.1f, 34.2f))
+        val result = TemperatureQuality.summarize(three, MeasurementMode.ACCURATE)
+        assertNotNull(result)
+        assertEquals(34.1f, result!!.meanCelsius!!, 0.01f)
+        assertEquals(0.2f, result.spreadCelsius!!, 0.001f)
+        assertTrue(result.detail.contains("准确测量"))
+    }
+
+    @Test
+    fun unstableAccurateMeasurementNeverReturnsValue() {
         val readings = (1..TemperatureQuality.MAX_SAMPLES)
             .map { if (it % 2 == 0) 33.0f else 34.0f }
-        val result = TemperatureQuality.summarize(samples(readings))
+        val result = TemperatureQuality.summarize(samples(readings), MeasurementMode.ACCURATE)
         assertNotNull(result)
         assertNull(result!!.meanCelsius)
         assertTrue(result.detail.contains("不稳定"))

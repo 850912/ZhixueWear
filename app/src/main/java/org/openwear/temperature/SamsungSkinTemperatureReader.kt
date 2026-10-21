@@ -43,6 +43,7 @@ internal enum class MeasurementStatus {
 
 internal class SamsungSkinTemperatureReader(
     context: Context,
+    private val mode: MeasurementMode,
     private val onResult: (MeasurementResult) -> Unit
 ) {
     private val appContext = context.applicationContext
@@ -59,8 +60,8 @@ internal class SamsungSkinTemperatureReader(
         active = true
         emit(MeasurementStatus.CONNECTING, "正在连接三星 Health Sensor Service…")
         timeout = Runnable {
-            finish(MeasurementStatus.TIMEOUT, "60 秒内未收到稳定皮肤温度样本。请确认手表贴合手腕后重试")
-        }.also { mainHandler.postDelayed(it, MEASUREMENT_TIMEOUT_MS) }
+            finish(MeasurementStatus.TIMEOUT, "${mode.estimatedSeconds} 秒内未收到稳定皮肤温度样本。请确认手表贴合手腕后重试")
+        }.also { mainHandler.postDelayed(it, TemperatureQuality.timeoutMs(mode)) }
         try {
             service = HealthTrackingService(connectionListener, appContext).also { it.connectService() }
         } catch (error: SecurityException) {
@@ -149,7 +150,7 @@ internal class SamsungSkinTemperatureReader(
                     samples += TemperatureSample(skin, ambient, point.timestamp)
                 }
             }
-            TemperatureQuality.summarize(samples)?.let { summary ->
+            TemperatureQuality.summarize(samples, mode)?.let { summary ->
                 finish(summary.status, summary.detail, summary.meanCelsius, summary.spreadCelsius)
             }
             if (samples.size >= TemperatureQuality.MAX_SAMPLES) {

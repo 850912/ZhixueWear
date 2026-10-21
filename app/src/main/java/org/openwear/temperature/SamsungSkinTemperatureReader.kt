@@ -233,7 +233,12 @@ internal class SamsungSkinTemperatureReader(
                     val y = point.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_Y)
                     val z = point.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_Z)
                     if (x != null && y != null && z != null) {
-                        motionSamples += MotionSample(x, y, z, point.timestamp)
+                        motionSamples += MotionSample(
+                            x.toFloat(),
+                            y.toFloat(),
+                            z.toFloat(),
+                            point.timestamp
+                        )
                         if (motionSamples.size > 20) motionSamples.removeAt(0)
                         updateMotionState()
                     }

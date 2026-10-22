@@ -36,8 +36,7 @@ internal object BackgroundMeasureScheduler {
         val periodMillis = interval.minutes * 60_000L
         val flexMillis = (periodMillis / 4).coerceAtLeast(MIN_FLEX_MILLIS)
         val info = JobInfo.Builder(JOB_ID, component)
-            .setPeriodic(periodMillis)
-            .setFlexMillis(flexMillis)
+            .setPeriodic(periodMillis, flexMillis)
             .setRequiresBatteryNotLow(true)
             .setPersisted(true)
             .setBackoffCriteria(BACKOFF_MILLIS, JobInfo.BACKOFF_POLICY_EXPONENTIAL)

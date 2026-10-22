@@ -25,7 +25,9 @@ import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,8 +39,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,6 +83,18 @@ import androidx.wear.compose.material3.TitleCard
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 
+/**
+ * 界面分为三个分页。
+ *
+ * 圆形表盘能显示的内容非常有限，把测量、趋势、设置全部塞进一个长列表会导致
+ * 用户“怎么滚都看不完”。分成三页后，每一页都能在一屏内读完。
+ */
+internal enum class ScreenTab(val label: String) {
+    MEASURE("测量"),
+    TREND("趋势"),
+    SETTINGS("设置")
+}
+
 @Composable
 internal fun TemperatureScreen(
     result: MeasurementResult,
@@ -96,6 +113,10 @@ internal fun TemperatureScreen(
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
+    var tab by remember { mutableStateOf(ScreenTab.MEASURE) }
+
+    // 切换分页后回到顶部，否则沿用上一页的滚动位置会看到空白页。
+    LaunchedEffect(tab) { listState.requestScrollToItem(0) }
 
     val now = System.currentTimeMillis()
     val filtered = history.filter { it.timeMillis >= now - trendRange.millis }
@@ -154,322 +175,394 @@ internal fun TemperatureScreen(
             }
         }
     ) { contentPadding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (animatedArcProgress > 0.01f) {
-                CircularProgressIndicator(
-                    progress = { animatedArcProgress },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(2.dp),
-                    strokeWidth = 4.dp
-                )
-            }
-
-            TransformingLazyColumn(
-                state = listState,
-                contentPadding = contentPadding,
-                flingBehavior = TransformingLazyColumnDefaults.snapFlingBehavior(listState),
-                rotaryScrollableBehavior = RotaryScrollableDefaults.snapBehavior(listState),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                item {
-                    ListHeader(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                            .minimumVerticalContentPadding(
-                                ListHeaderDefaults.minimumTopListContentPadding
-                            ),
-                        transformation = SurfaceTransformation(transformationSpec)
-                    ) {
-                        Text(
-                            text = "皮肤温度",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-
-                item {
-                    ExpressiveThermalHeroCard(
-                        result = result,
-                        arcProgress = animatedArcProgress,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                            .minimumVerticalContentPadding(
-                                CardDefaults.minimumVerticalListContentPadding
-                            ),
-                        transformation = SurfaceTransformation(transformationSpec)
-                    )
-                }
-
-                item {
-                    ListHeader(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec),
-                        transformation = SurfaceTransformation(transformationSpec)
-                    ) {
-                        Text(
-                            text = "测量模式",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                    ) {
-                        RowModeButtons(mode = mode, onModeChanged = onModeChanged)
-                    }
-                }
-
-                item {
-                    Text(
-                        text = "预计用时：${mode.estimatedSeconds} 秒",
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                    ) {
-                        WearStatusRow(wearState = wearState)
-                    }
-                }
-
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                    ) {
-                        AutoMeasureToggle(
-                            enabled = autoMeasure,
-                            onToggle = { onAutoMeasureChanged(!autoMeasure) }
-                        )
-                    }
-                }
-
-                if (autoMeasure) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            // 圆形表盘左右两侧会被圆弧裁掉，再留一点安全区。
+            val safeHorizontal = maxWidth * 0.04f
+            Box(modifier = Modifier.fillMaxSize()) {
+                TransformingLazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = contentPadding + PaddingValues(horizontal = safeHorizontal),
+                    flingBehavior = TransformingLazyColumnDefaults.snapFlingBehavior(listState),
+                    rotaryScrollableBehavior = RotaryScrollableDefaults.snapBehavior(listState),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    // 圆形表盘顶部最窄，顶部对齐会让第一排控件被圆弧裁掉；
+                    // 内容不足一屏时改为垂直居中。
+                    verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
+                ) {
                     item {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .transformedHeight(this, transformationSpec)
                         ) {
-                            RowBackgroundIntervalButtons(
-                                interval = backgroundInterval,
-                                onIntervalChanged = onBackgroundIntervalChanged
-                            )
+                            ScreenTabBar(selected = tab, onSelect = { tab = it })
                         }
                     }
-                    item {
-                        Text(
-                            text = "后台每 ${backgroundInterval.label} 采样一次；未佩戴或读数无效时不会记录，采样结束立即释放传感器。",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyExtraSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
 
-                if (permissionMessage.isNotBlank()) {
-                    item {
-                        TitleCard(
-                            onClick = onMeasure,
-                            title = {
-                                Text(
-                                    text = "权限提示",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
+                    when (tab) {
+                        ScreenTab.MEASURE -> {
+                            item {
+                                ExpressiveThermalHeroCard(
+                                    result = result,
+                                    arcProgress = animatedArcProgress,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .transformedHeight(this, transformationSpec)
+                                        .minimumVerticalContentPadding(
+                                            CardDefaults.minimumVerticalListContentPadding
+                                        ),
+                                    transformation = SurfaceTransformation(transformationSpec)
                                 )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .transformedHeight(this, transformationSpec)
-                                .minimumVerticalContentPadding(
-                                    CardDefaults.minimumVerticalListContentPadding
-                                ),
-                            transformation = SurfaceTransformation(transformationSpec),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        ) {
-                            Text(
-                                text = permissionMessage,
-                                style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
+                            }
 
-                if (result.status !in setOf(MeasurementStatus.IDLE, MeasurementStatus.COMPLETE)) {
-                    item {
-                        Card(
-                            onClick = onMeasure,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .transformedHeight(this, transformationSpec)
-                                .minimumVerticalContentPadding(
-                                    CardDefaults.minimumVerticalListContentPadding
-                                ),
-                            transformation = SurfaceTransformation(transformationSpec),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            )
-                        ) {
-                            Text(
-                                text = result.detail,
-                                style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                }
-
-                item {
-                    ListHeader(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec),
-                        transformation = SurfaceTransformation(transformationSpec)
-                    ) {
-                        Text(
-                            text = "个人趋势 · ${trendRange.label}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                    ) {
-                        RowRangeButtons(range = trendRange, onRangeChanged = onTrendRangeChanged)
-                    }
-                }
-
-                if (filtered.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "样本 ${filtered.size} · 均值 ${"%.1f°".format(trendMean)}",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .transformedHeight(this, transformationSpec)
-                                .height(116.dp)
-                        ) {
-                            TrendChart(records = filtered)
-                        }
-                    }
-                    filtered.takeLast(8).reversed().forEach { record ->
-                        item {
-                            Card(
-                                onClick = {},
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .transformedHeight(this, transformationSpec)
-                                    .minimumVerticalContentPadding(
-                                        CardDefaults.minimumVerticalListContentPadding
-                                    ),
-                                transformation = SurfaceTransformation(transformationSpec),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .transformedHeight(this, transformationSpec)
                                 ) {
-                                    Text(
-                                        text = "${formatTime(record.timeMillis, showDate)}  ${"%.1f°".format(record.skinCelsius)}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        text = if (trendMean != null) {
-                                            val delta = record.skinCelsius - trendMean
-                                            when {
-                                                delta > 0.05f -> "+%.1f°".format(delta)
-                                                delta < -0.05f -> "%.1f°".format(delta)
-                                                else -> "基准"
-                                            }
-                                        } else {
-                                            "--"
+                                    RowModeButtons(mode = mode, onModeChanged = onModeChanged)
+                                }
+                            }
+
+                            item {
+                                Text(
+                                    text = "预计用时：${mode.estimatedSeconds} 秒",
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .transformedHeight(this, transformationSpec)
+                                ) {
+                                    WearStatusRow(wearState = wearState)
+                                }
+                            }
+
+                            if (permissionMessage.isNotBlank()) {
+                                item {
+                                    TitleCard(
+                                        onClick = onMeasure,
+                                        title = {
+                                            Text(
+                                                text = "权限提示",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
                                         },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .transformedHeight(this, transformationSpec)
+                                            .minimumVerticalContentPadding(
+                                                CardDefaults.minimumVerticalListContentPadding
+                                            ),
+                                        transformation = SurfaceTransformation(transformationSpec),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    ) {
+                                        Text(
+                                            text = permissionMessage,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (result.status !in setOf(MeasurementStatus.IDLE, MeasurementStatus.COMPLETE)) {
+                                item {
+                                    Card(
+                                        onClick = onMeasure,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .transformedHeight(this, transformationSpec)
+                                            .minimumVerticalContentPadding(
+                                                CardDefaults.minimumVerticalListContentPadding
+                                            ),
+                                        transformation = SurfaceTransformation(transformationSpec),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                        )
+                                    ) {
+                                        Text(
+                                            text = result.detail,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                } else {
-                    item {
-                        OutlinedCard(
-                            onClick = {},
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .transformedHeight(this, transformationSpec)
-                                .minimumVerticalContentPadding(
-                                    CardDefaults.minimumVerticalListContentPadding
-                                ),
-                            transformation = SurfaceTransformation(transformationSpec)
-                        ) {
-                            Text(
-                                text = "该时段暂无历史记录",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+
+                        ScreenTab.TREND -> {
+                            item {
+                                ListHeader(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .transformedHeight(this, transformationSpec),
+                                    transformation = SurfaceTransformation(transformationSpec)
+                                ) {
+                                    Text(
+                                        text = "个人趋势 · ${trendRange.label}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .transformedHeight(this, transformationSpec)
+                                ) {
+                                    RowRangeButtons(range = trendRange, onRangeChanged = onTrendRangeChanged)
+                                }
+                            }
+
+                            if (filtered.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "样本 ${filtered.size} · 均值 ${"%.1f°".format(trendMean)}" +
+                                            " · 高 ${"%.1f°".format(trendMax ?: 0f)}" +
+                                            " · 低 ${"%.1f°".format(trendMin ?: 0f)}",
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .transformedHeight(this, transformationSpec)
+                                            .height(110.dp)
+                                    ) {
+                                        TrendChart(records = filtered)
+                                    }
+                                }
+                                filtered.takeLast(5).reversed().forEach { record ->
+                                    item {
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .transformedHeight(this, transformationSpec)
+                                                .minimumVerticalContentPadding(
+                                                    CardDefaults.minimumVerticalListContentPadding
+                                                ),
+                                            transformation = SurfaceTransformation(transformationSpec),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                                            )
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "${formatTime(record.timeMillis, showDate)}  ${"%.1f°".format(record.skinCelsius)}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Text(
+                                                    text = if (trendMean != null) {
+                                                        val delta = record.skinCelsius - trendMean
+                                                        when {
+                                                            delta > 0.05f -> "+%.1f°".format(delta)
+                                                            delta < -0.05f -> "%.1f°".format(delta)
+                                                            else -> "基准"
+                                                        }
+                                                    } else {
+                                                        "--"
+                                                    },
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                item {
+                                    OutlinedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .transformedHeight(this, transformationSpec)
+                                            .minimumVerticalContentPadding(
+                                                CardDefaults.minimumVerticalListContentPadding
+                                            ),
+                                        transformation = SurfaceTransformation(transformationSpec)
+                                    ) {
+                                        Text(
+                                            text = "该时段暂无历史记录",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        ScreenTab.SETTINGS -> {
+                            item {
+                                ListHeader(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .transformedHeight(this, transformationSpec),
+                                    transformation = SurfaceTransformation(transformationSpec)
+                                ) {
+                                    Text(
+                                        text = "后台自动测量",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .transformedHeight(this, transformationSpec)
+                                ) {
+                                    AutoMeasureToggle(
+                                        enabled = autoMeasure,
+                                        onToggle = { onAutoMeasureChanged(!autoMeasure) }
+                                    )
+                                }
+                            }
+
+                            if (autoMeasure) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .transformedHeight(this, transformationSpec)
+                                    ) {
+                                        RowBackgroundIntervalButtons(
+                                            interval = backgroundInterval,
+                                            onIntervalChanged = onBackgroundIntervalChanged
+                                        )
+                                    }
+                                }
+                                item {
+                                    Text(
+                                        text = "后台每 ${backgroundInterval.label} 采样一次；未佩戴或读数无效时不会记录，采样结束立即释放传感器。",
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.bodyExtraSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            item {
+                                ListHeader(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .transformedHeight(this, transformationSpec),
+                                    transformation = SurfaceTransformation(transformationSpec)
+                                ) {
+                                    Text(
+                                        text = "测量说明",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            item {
+                                Text(
+                                    text = "静坐、贴合佩戴；运动、洗澡或温差环境后等待 30 分钟。",
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodyExtraSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            item {
+                                Text(
+                                    text = "重要：腕部皮肤温度 ≠ 核心体温。仅供趋势观察，不用于发烧判断、诊断或治疗。",
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodyExtraSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    maxLines = 4,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
 
-                item {
-                    Text(
-                        text = "静坐、贴合佩戴；运动、洗澡或温差环境后等待 30 分钟。",
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyExtraSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                // 进度环必须画在内容之上：之前它先于列表绘制，会被卡片完全盖住。
+                if (animatedArcProgress > 0.01f) {
+                    CircularProgressIndicator(
+                        progress = { animatedArcProgress },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(3.dp),
+                        strokeWidth = 4.dp
                     )
                 }
-                item {
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScreenTabBar(selected: ScreenTab, onSelect: (ScreenTab) -> Unit) {
+    ButtonGroup(modifier = Modifier.fillMaxWidth()) {
+        ScreenTab.values().forEach { entry ->
+            val isSelected = entry == selected
+            val interactionSource = remember(entry) { MutableInteractionSource() }
+            if (isSelected) {
+                Button(
+                    onClick = { onSelect(entry) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(26.dp),
+                    interactionSource = interactionSource
+                ) {
                     Text(
-                        text = "重要：腕部皮肤温度 ≠ 核心体温。仅供趋势观察，不用于发烧判断、诊断或治疗。",
+                        text = entry.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyExtraSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        maxLines = 3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                Button(
+                    onClick = { onSelect(entry) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(26.dp),
+                    interactionSource = interactionSource,
+                    colors = ButtonDefaults.filledTonalButtonColors()
+                ) {
+                    Text(
+                        text = entry.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -504,7 +597,6 @@ private fun ExpressiveThermalHeroCard(
     )
 
     Card(
-        onClick = {},
         modifier = modifier,
         transformation = transformation,
         colors = CardDefaults.cardColors(
@@ -520,7 +612,9 @@ private fun ExpressiveThermalHeroCard(
                 style = MaterialTheme.typography.numeralExtraLarge,
                 fontWeight = FontWeight.Bold,
                 color = valueColor,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = "腕部皮肤温度",
@@ -528,22 +622,33 @@ private fun ExpressiveThermalHeroCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            if (arcProgress > 0.01f && arcProgress < 0.999f) {
+                Spacer(modifier = Modifier.height(6.dp))
+                // 卡片内部的进度条：即使表盘进度环被裁掉，也能看到测量进度。
+                LinearProgressIndicator(
+                    progress = { arcProgress },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 ReadingCell(
                     label = "环境",
-                    value = result.ambientCelsius?.let { "%.1f°".format(it) } ?: "--°"
+                    value = result.ambientCelsius?.let { "%.1f°".format(it) } ?: "--°",
+                    modifier = Modifier.weight(1f)
                 )
                 ReadingCell(
                     label = "波动",
-                    value = result.spreadCelsius?.let { "%.1f°".format(it) } ?: "--°"
+                    value = result.spreadCelsius?.let { "%.1f°".format(it) } ?: "--°",
+                    modifier = Modifier.weight(1f)
                 )
                 ReadingCell(
                     label = "状态",
-                    value = statusLabel(result.status)
+                    value = statusLabel(result.status),
+                    modifier = Modifier.weight(1.4f)
                 )
             }
             if (result.meanCelsius != null) {
@@ -559,10 +664,14 @@ private fun ExpressiveThermalHeroCard(
 }
 
 @Composable
-private fun ReadingCell(label: String, value: String) {
+private fun ReadingCell(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 4.dp)
+        modifier = modifier.padding(horizontal = 2.dp)
     ) {
         Text(
             text = label,
@@ -602,7 +711,6 @@ private fun WearStatusRow(wearState: WearState) {
     }
 
     Card(
-        onClick = {},
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = container)
     ) {
@@ -637,7 +745,7 @@ private fun AutoMeasureToggle(enabled: Boolean, onToggle: () -> Unit) {
         interactionSource = interactionSource
     ) {
         Text(
-            text = "\u9759\u606f\u81ea\u52a8\u6d4b\u91cf",
+            text = "静息自动测量",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
@@ -773,7 +881,7 @@ private fun RowRangeButtons(
             val selected = r == range
             val interactionSource = remember(r) { MutableInteractionSource() }
             val animatedWeight by animateFloatAsState(
-                targetValue = if (selected) 1.22f else 1.0f,
+                targetValue = if (selected) 1.26f else 1.0f,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMediumLow
@@ -781,7 +889,7 @@ private fun RowRangeButtons(
                 label = "m3eRangeWeight_${r.name}"
             )
             val cornerRadius by animateDpAsState(
-                targetValue = if (selected) 12.dp else 24.dp,
+                targetValue = if (selected) 14.dp else 26.dp,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMedium
@@ -874,7 +982,7 @@ private fun TrendChart(records: List<TemperatureRecord>) {
 
     if (points.size < 2) {
         Text(
-            text = "\u6570\u636e\u70b9\u4e0d\u8db3\uff0c\u7ee7\u7eed\u6d4b\u91cf\u540e\u5373\u53ef\u770b\u5230\u8d8b\u52bf\u66f2\u7ebf",
+            text = "数据点不足，继续测量后即可看到趋势曲线",
             style = MaterialTheme.typography.bodySmall,
             color = axisColor,
             textAlign = TextAlign.Center,
@@ -887,7 +995,7 @@ private fun TrendChart(records: List<TemperatureRecord>) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp)
+                .height(84.dp)
         ) {
             val values = points.map { it.meanCelsius }
             val lowRaw = minOf(values.min(), summary.min ?: values.min())
@@ -906,7 +1014,7 @@ private fun TrendChart(records: List<TemperatureRecord>) {
             fun yOf(value: Float): Float =
                 size.height - ((value - low) / span) * size.height
 
-            // \u53c2\u8003\u7ebf\uff1a\u6700\u9ad8 / \u5747\u503c / \u6700\u4f4e
+            // 参考线：最高 / 均值 / 最低
             listOfNotNull(summary.max, summary.mean, summary.min).forEach { level ->
                 val y = yOf(level)
                 drawLine(
@@ -962,18 +1070,24 @@ private fun TrendChart(records: List<TemperatureRecord>) {
             Text(
                 text = formatTime(points.first().startMillis, true),
                 style = MaterialTheme.typography.labelSmall,
-                color = axisColor
+                color = axisColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "\u5747 ${"%.1f\u00b0".format(summary.mean ?: 0f)}  \u9ad8 ${"%.1f\u00b0".format(summary.max ?: 0f)}  \u4f4e ${"%.1f\u00b0".format(summary.min ?: 0f)}",
+                text = "均 ${"%.1f°".format(summary.mean ?: 0f)}  高 ${"%.1f°".format(summary.max ?: 0f)}  低 ${"%.1f°".format(summary.min ?: 0f)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = lineColor,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = formatTime(points.last().endMillis, true),
                 style = MaterialTheme.typography.labelSmall,
-                color = axisColor
+                color = axisColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

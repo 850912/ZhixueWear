@@ -6,19 +6,29 @@ An isolated Wear OS prototype for Samsung Galaxy Watch skin-temperature readings
 
 - **Wrist skin temperature monitoring**: Reads Samsung skin-temperature samples and labels them as wrist skin temperature, **not** core body temperature.
 - **Two measurement modes**:
-  - **快速测量** (~25 s): Single sample, fast but less precise. For reference only.
-  - **准确测量** (~105 s): Requires 5 stable samples (spread ≤ 0.3 °C) for a more reliable reading.
-- **Object temperature**: Also displays object temperature measured by the same sensor (for reference only).
-- **Wear detection**: Detects whether the watch is snug against the wrist using skin temperature sensor feedback.
-- **Motion detection**: Uses accelerometer data to detect wrist movement; measurements pause if motion is detected.
-- **Auto-measure**: When enabled, automatically starts a measurement when the watch is worn and the wrist is still.
-- **Personal trend view**: Selectable time ranges (1 hour / 1 day / 1 week / 1 month) with mean, min/max, and per-sample list.
-- Shows separate Health Sensor Service connection, device capability, permission, SDK-policy, tracker-error, and timeout states.
-- Local history storage (up to 200 readings) with mean and range summary per selected period.
+  - **快速测量** (~20 s): Single sample, fast but less precise. For reference only.
+  - **准确测量** (~45 s): Requires 5 stable samples (spread ≤ 0.3 °C) for a more reliable reading.
+- **Ambient temperature**: Shows the ambient temperature reported together with the skin temperature by the same sensor.
+- **Wear detection**: Detects whether the watch is snug against the wrist by comparing skin temperature against ambient temperature (off-wrist the two converge).
+- **Motion detection**: Uses the system accelerometer (5 Hz) to detect wrist movement; samples are skipped while the wrist is moving.
+- **Background auto-measure**: When enabled, a system `JobScheduler` job takes **one** sample every 15 / 30 / 60 minutes, even when the app is closed.
+- **Personal trend view**: Selectable time ranges (1 hour / 1 day / 1 week / 1 month) with a real time-axis chart (max / mean / min reference lines, gradient area, data points) and a per-sample list.
+- Shows separate Health Sensor Service connection, device capability, permission, SDK-policy, tracker-error, not-worn, motion and timeout states.
+- Local history storage (up to 1000 readings) with mean and range summary per selected period.
 
 ## Samsung SDK and hardware
 
-The project includes Samsung Health Sensor SDK 1.4.1 in `app/libs/` and uses `HealthTrackingService`, `HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND`, and `ValueKey.SkinTemperatureSet`. Runtime operation requires a supported Galaxy Watch, current Samsung Health Sensor Service / Health Platform, supported firmware, and the appropriate runtime body-sensor permission. Emulator and non-Samsung watch testing cannot validate the hardware path.
+The project includes Samsung Health Sensor SDK 1.4.1 in `app/libs/` and uses `HealthTrackingService`, `HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS` and `ValueKey.SkinTemperatureSet`. Runtime operation requires a supported Galaxy Watch, current Samsung Health Sensor Service / Health Platform, supported firmware, and the appropriate runtime body-sensor permission. Emulator and non-Samsung watch testing cannot validate the hardware path.
+
+`ValueKey.SkinTemperatureSet` exposes exactly three values:
+
+| Key | Meaning |
+| --- | --- |
+| `OBJECT_TEMPERATURE` | Temperature of the object touching the watch — i.e. the **wrist skin temperature** while worn |
+| `AMBIENT_TEMPERATURE` | Ambient temperature around the watch |
+| `STATUS` | `0` = normal, `-1` = error (erroneous data points are discarded) |
+
+There is **no** separate "skin temperature" value and no third temperature channel; earlier builds displayed `OBJECT_TEMPERATURE` twice under two different labels.
 
 The SDK archive's announcement and license text is included at `licenses/samsung-health-sensor-sdk-1.4.1-Announcement.txt`. Review it before redistribution.
 
@@ -30,16 +40,24 @@ Any paired research observations are local-only. They are not uploaded or separa
 
 This app requests:
 
-- `android.permission.health.READ_SKIN_TEMPERATURE` — skin temperature data
-- `android.permission.BODY_SENSORS` — general body sensor access (compatibility)
+- `android.permission.BODY_SENSORS` — skin temperature data (targetSdk ≤ 35)
+- `android.permission.health.READ_SKIN_TEMPERATURE` — skin temperature data (targetSdk ≥ 36)
 - `com.samsung.android.hardware.sensormanager.permission.READ_ADDITIONAL_HEALTH_DATA` — Samsung-specific health data
-- `android.permission.ACTIVITY_RECOGNITION` — motion detection
+- `android.permission.ACTIVITY_RECOGNITION` — motion detection (optional: the measurement still runs without it)
+- `android.permission.RECEIVE_BOOT_COMPLETED` — restores the background job after a reboot
 
 ## Power consumption notes
 
-- Sensors are only active during an active measurement session; they are stopped immediately after a result is returned.
-- Sampling interval is throttled to 2 seconds to reduce sensor wake-ups.
-- Motion tracking uses a small rolling window (5 samples) to minimize memory and CPU usage.
+Background measurement is designed around *not* keeping the radio/CPU/sensor alive:
+
+- **No foreground service.** There is no persistent notification and no wakelock; the process can be reclaimed as soon as the job ends.
+- **`JobScheduler`, not exact alarms.** Periodic jobs are batched by the system into Doze / App Standby friendly wake-up windows, so the number of wake-ups is minimal and no exact-alarm quota is consumed.
+- **One sample per wake-up.** A background run connects, takes a single reading, disconnects and exits. The skin-temperature sensor is therefore powered for roughly ten seconds per run instead of staying hot.
+- **No motion detection in the background.** The accelerometer is only registered during a foreground measurement.
+- **`setRequiresBatteryNotLow(true)`.** The system postpones background sampling while the battery is low.
+- **The sensor is released as soon as the app leaves the foreground** (`onStop`), so the watch never keeps the sensor running in the background by accident.
+- **Motion tracking uses a small rolling window (5 samples)** and is unregistered immediately after a measurement.
+- A longer background interval (60 min) costs proportionally less than 15 min.
 
 ## Build
 

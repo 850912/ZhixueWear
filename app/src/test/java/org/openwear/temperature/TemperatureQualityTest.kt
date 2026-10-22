@@ -8,17 +8,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TemperatureQualityTest {
+
     @Test
     fun acceptsFiniteInRangeSamples() {
-        assertTrue(TemperatureQuality.isValidSample(34.2f, 24.0f, 34.0f))
-        assertFalse(TemperatureQuality.isValidSample(Float.NaN, 24.0f, 34.0f))
-        assertFalse(TemperatureQuality.isValidSample(46.0f, 24.0f, 34.0f))
-        assertFalse(TemperatureQuality.isValidSample(34.2f, 24.0f, 99.0f))
+        assertTrue(TemperatureQuality.isValidSample(34.2f, 24.0f))
+        assertFalse(TemperatureQuality.isValidSample(Float.NaN, 24.0f))
+        assertFalse(TemperatureQuality.isValidSample(46.0f, 24.0f))
+        assertFalse(TemperatureQuality.isValidSample(34.2f, Float.NaN))
     }
 
     @Test
     fun rejectsSampleWhenSkinIsNotAboveAmbient() {
-        assertFalse(TemperatureQuality.isValidSample(23.0f, 24.0f, 23.0f))
+        assertFalse(TemperatureQuality.isValidSample(23.0f, 24.0f))
+        assertTrue(TemperatureQuality.isValidSample(25.5f, 24.0f))
+    }
+
+    @Test
+    fun acceptsColdAmbientEnvironment() {
+        // 冬天室内 10°C 属于正常环境，不应该把所有样本都判为无效。
+        assertTrue(TemperatureQuality.isValidSample(30.5f, 10.0f))
     }
 
     @Test
@@ -48,12 +56,37 @@ class TemperatureQualityTest {
         val readings = (1..TemperatureQuality.MAX_SAMPLES)
             .map { if (it % 2 == 0) 33.0f else 34.0f }
         val result = TemperatureQuality.summarize(samples(readings), MeasurementMode.ACCURATE)
-        assertNotNull(result)
-        assertNull(result!!.meanCelsius)
-        assertTrue(result.detail.contains("不稳定"))
+        assertNull(result)
+    }
+
+    @Test
+    fun wearStateDetectsOffWristReading() {
+        // 皮肤温度与环境温度接近 -> 手表没有贴在手腕上。
+        val offWrist = TemperatureQuality.wearState(24.5f, 24.0f, isMoving = false)
+        assertFalse(offWrist.isWearing)
+
+        val onWrist = TemperatureQuality.wearState(33.5f, 24.0f, isMoving = false)
+        assertTrue(onWrist.isWearing)
+    }
+
+    @Test
+    fun wearStateReportsMotion() {
+        val moving = TemperatureQuality.wearState(33.5f, 24.0f, isMoving = true)
+        assertTrue(moving.isWearing)
+        assertTrue(moving.isMoving)
+        assertTrue(moving.reason.contains("运动"))
+    }
+
+    @Test
+    fun timeoutsAreConsistentWithUiEstimate() {
+        assertTrue(TemperatureQuality.timeoutMs(MeasurementMode.QUICK) > 0)
+        assertTrue(
+            TemperatureQuality.unstableAfterMs(MeasurementMode.ACCURATE) <
+                TemperatureQuality.timeoutMs(MeasurementMode.ACCURATE)
+        )
     }
 
     private fun samples(values: List<Float>) = values.mapIndexed { index, value ->
-        TemperatureSample(value, 24.0f, value, index.toLong())
+        TemperatureSample(value, 24.0f, index.toLong())
     }
 }

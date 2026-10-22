@@ -49,7 +49,9 @@ internal fun BodyTemperatureWearTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val colorScheme = dynamicColorScheme(context) ?: ExpressiveThermalColorScheme
+    // 部分 Wear OS 固件没有实现动态取色接口，这里做降级保护，避免直接崩溃。
+    val colorScheme = runCatching { dynamicColorScheme(context) }.getOrNull()
+        ?: ExpressiveThermalColorScheme
     MaterialTheme(
         colorScheme = colorScheme,
         motionScheme = MotionScheme.expressive(),

@@ -83,21 +83,24 @@ internal fun TemperatureScreen(
     result: MeasurementResult,
     mode: MeasurementMode,
     trendRange: TrendRange,
-    history: List<Pair<Long, Float>>,
+    history: List<TemperatureRecord>,
     wearState: WearState,
     autoMeasure: Boolean,
+    backgroundInterval: BackgroundInterval,
     permissionMessage: String,
     onModeChanged: (MeasurementMode) -> Unit,
     onTrendRangeChanged: (TrendRange) -> Unit,
     onAutoMeasureChanged: (Boolean) -> Unit,
+    onBackgroundIntervalChanged: (BackgroundInterval) -> Unit,
     onMeasure: () -> Unit
 ) {
     val listState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
 
     val now = System.currentTimeMillis()
-    val filtered = history.filter { (t, _) -> now - t <= trendRange.millis }
-    val values = filtered.map { it.second }
+    val filtered = history.filter { it.timeMillis >= now - trendRange.millis }
+    val values = filtered.map { it.skinCelsius }
+    val showDate = trendRange == TrendRange.WEEK || trendRange == TrendRange.MONTH
     val trendMean = if (values.isNotEmpty()) values.average().toFloat() else null
     val trendMin = values.minOrNull()
     val trendMax = values.maxOrNull()
@@ -261,6 +264,29 @@ internal fun TemperatureScreen(
                     }
                 }
 
+                if (autoMeasure) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .transformedHeight(this, transformationSpec)
+                        ) {
+                            RowBackgroundIntervalButtons(
+                                interval = backgroundInterval,
+                                onIntervalChanged = onBackgroundIntervalChanged
+                            )
+                        }
+                    }
+                    item {
+                        Text(
+                            text = "后台每 ${backgroundInterval.label} 采样一次；未佩戴或读数无效时不会记录，采样结束立即释放传感器。",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyExtraSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
                 if (permissionMessage.isNotBlank()) {
                     item {
                         TitleCard(
@@ -358,12 +384,12 @@ internal fun TemperatureScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .transformedHeight(this, transformationSpec)
-                                .height(72.dp)
+                                .height(116.dp)
                         ) {
-                            ExpressiveTrendSparkline(points = filtered.map { it.second })
+                            TrendChart(records = filtered)
                         }
                     }
-                    filtered.takeLast(8).reversed().forEach { (time, value) ->
+                    filtered.takeLast(8).reversed().forEach { record ->
                         item {
                             Card(
                                 onClick = {},
@@ -384,13 +410,13 @@ internal fun TemperatureScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${formatTime(time)}  ${"%.1f°".format(value)}",
+                                        text = "${formatTime(record.timeMillis, showDate)}  ${"%.1f°".format(record.skinCelsius)}",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium
                                     )
                                     Text(
                                         text = if (trendMean != null) {
-                                            val delta = value - trendMean
+                                            val delta = record.skinCelsius - trendMean
                                             when {
                                                 delta > 0.05f -> "+%.1f°".format(delta)
                                                 delta < -0.05f -> "%.1f°".format(delta)
@@ -512,8 +538,8 @@ private fun ExpressiveThermalHeroCard(
                     value = result.ambientCelsius?.let { "%.1f°".format(it) } ?: "--°"
                 )
                 ReadingCell(
-                    label = "物体",
-                    value = result.objectCelsius?.let { "%.1f°".format(it) } ?: "--°"
+                    label = "波动",
+                    value = result.spreadCelsius?.let { "%.1f°".format(it) } ?: "--°"
                 )
                 ReadingCell(
                     label = "状态",
@@ -604,36 +630,65 @@ private fun WearStatusRow(wearState: WearState) {
 @Composable
 private fun AutoMeasureToggle(enabled: Boolean, onToggle: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
-    if (enabled) {
-        TextToggleButton(
-            checked = true,
-            onCheckedChange = { onToggle() },
-            modifier = Modifier.fillMaxWidth(),
-            interactionSource = interactionSource
-        ) {
-            Text(
-                text = "静息自动测量",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    } else {
-        TextToggleButton(
-            checked = false,
-            onCheckedChange = { onToggle() },
-            modifier = Modifier.fillMaxWidth(),
-            interactionSource = interactionSource
-        ) {
-            Text(
-                text = "静息自动测量",
-                style = MaterialTheme.typography.labelMedium,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+    TextToggleButton(
+        checked = enabled,
+        onCheckedChange = { onToggle() },
+        modifier = Modifier.fillMaxWidth(),
+        interactionSource = interactionSource
+    ) {
+        Text(
+            text = "\u9759\u606f\u81ea\u52a8\u6d4b\u91cf",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun RowBackgroundIntervalButtons(
+    interval: BackgroundInterval,
+    onIntervalChanged: (BackgroundInterval) -> Unit
+) {
+    ButtonGroup(modifier = Modifier.fillMaxWidth()) {
+        BackgroundInterval.values().forEach { option ->
+            val selected = option == interval
+            val interactionSource = remember(option) { MutableInteractionSource() }
+            if (selected) {
+                Button(
+                    onClick = { onIntervalChanged(option) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(26.dp),
+                    interactionSource = interactionSource
+                ) {
+                    Text(
+                        text = option.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                Button(
+                    onClick = { onIntervalChanged(option) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(26.dp),
+                    interactionSource = interactionSource,
+                    colors = ButtonDefaults.filledTonalButtonColors()
+                ) {
+                    Text(
+                        text = option.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }
@@ -792,57 +847,134 @@ private fun statusLabel(status: MeasurementStatus): String = when (status) {
     MeasurementStatus.MOVING -> "运动中"
 }
 
-private fun formatTime(millis: Long): String {
+private fun formatTime(millis: Long, withDate: Boolean = false): String {
     val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-    return "%02d:%02d".format(
+    val time = "%02d:%02d".format(
         cal.get(java.util.Calendar.HOUR_OF_DAY),
         cal.get(java.util.Calendar.MINUTE)
+    )
+    if (!withDate) return time
+    return "%02d/%02d %s".format(
+        cal.get(java.util.Calendar.MONTH) + 1,
+        cal.get(java.util.Calendar.DAY_OF_MONTH),
+        time
     )
 }
 
 private fun Modifier.animateWidth(interactionSource: MutableInteractionSource): Modifier = this
 
 @Composable
-private fun ExpressiveTrendSparkline(points: List<Float>) {
+private fun TrendChart(records: List<TemperatureRecord>) {
     val lineColor = MaterialTheme.colorScheme.primary
     val dotColor = MaterialTheme.colorScheme.tertiary
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        if (points.size < 2) return@Canvas
-        val minValue = points.min()
-        val maxValue = points.max()
-        val span = (maxValue - minValue).coerceAtLeast(0.2f)
-        val stepX = size.width / (points.size - 1)
-        val path = Path()
-        points.forEachIndexed { index, value ->
-            val x = stepX * index
-            val y = size.height - ((value - minValue) / span) * size.height
-            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        val strokePath = Path()
-        points.forEachIndexed { index, value ->
-            val x = stepX * index
-            val y = size.height - ((value - minValue) / span) * size.height
-            if (index == 0) strokePath.moveTo(x, y) else strokePath.lineTo(x, y)
-        }
-        drawPath(
-            path = path,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    lineColor.copy(alpha = 0.34f),
-                    lineColor.copy(alpha = 0.02f)
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val axisColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val points = TrendStats.bucket(records)
+    val summary = TrendStats.summarize(records)
+
+    if (points.size < 2) {
+        Text(
+            text = "\u6570\u636e\u70b9\u4e0d\u8db3\uff0c\u7ee7\u7eed\u6d4b\u91cf\u540e\u5373\u53ef\u770b\u5230\u8d8b\u52bf\u66f2\u7ebf",
+            style = MaterialTheme.typography.bodySmall,
+            color = axisColor,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(88.dp)
+        ) {
+            val values = points.map { it.meanCelsius }
+            val lowRaw = minOf(values.min(), summary.min ?: values.min())
+            val highRaw = maxOf(values.max(), summary.max ?: values.max())
+            val pad = maxOf((highRaw - lowRaw) * 0.18f, 0.25f)
+            val low = lowRaw - pad
+            val high = highRaw + pad
+            val span = (high - low).coerceAtLeast(0.01f)
+            val startMillis = points.first().startMillis
+            val endMillis = points.last().endMillis
+            val timeSpan = (endMillis - startMillis).coerceAtLeast(1L)
+
+            fun xOf(millis: Long): Float =
+                ((millis - startMillis).toFloat() / timeSpan) * size.width
+
+            fun yOf(value: Float): Float =
+                size.height - ((value - low) / span) * size.height
+
+            // \u53c2\u8003\u7ebf\uff1a\u6700\u9ad8 / \u5747\u503c / \u6700\u4f4e
+            listOfNotNull(summary.max, summary.mean, summary.min).forEach { level ->
+                val y = yOf(level)
+                drawLine(
+                    color = gridColor,
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
+
+            val linePath = Path()
+            val areaPath = Path()
+            points.forEachIndexed { index, point ->
+                val x = xOf(point.startMillis)
+                val y = yOf(point.meanCelsius)
+                if (index == 0) {
+                    linePath.moveTo(x, y)
+                    areaPath.moveTo(x, y)
+                } else {
+                    linePath.lineTo(x, y)
+                    areaPath.lineTo(x, y)
+                }
+            }
+            areaPath.lineTo(size.width, size.height)
+            areaPath.lineTo(0f, size.height)
+            areaPath.close()
+
+            drawPath(
+                path = areaPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        lineColor.copy(alpha = 0.32f),
+                        lineColor.copy(alpha = 0.02f)
+                    )
                 )
             )
-        )
-        drawPath(
-            path = strokePath,
-            color = lineColor,
-            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
-        )
-        points.lastOrNull()?.let { lastValue ->
-            val x = size.width
-            val y = size.height - ((lastValue - minValue) / span) * size.height
-            drawCircle(color = dotColor.copy(alpha = 0.35f), radius = 6.dp.toPx(), center = Offset(x, y))
-            drawCircle(color = lineColor, radius = 3.dp.toPx(), center = Offset(x, y))
+            drawPath(
+                path = linePath,
+                color = lineColor,
+                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+            )
+            points.forEach { point ->
+                val center = Offset(xOf(point.startMillis), yOf(point.meanCelsius))
+                drawCircle(color = dotColor.copy(alpha = 0.4f), radius = 5.dp.toPx(), center = center)
+                drawCircle(color = lineColor, radius = 2.5.dp.toPx(), center = center)
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = formatTime(points.first().startMillis, true),
+                style = MaterialTheme.typography.labelSmall,
+                color = axisColor
+            )
+            Text(
+                text = "\u5747 ${"%.1f\u00b0".format(summary.mean ?: 0f)}  \u9ad8 ${"%.1f\u00b0".format(summary.max ?: 0f)}  \u4f4e ${"%.1f\u00b0".format(summary.min ?: 0f)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = lineColor,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = formatTime(points.last().endMillis, true),
+                style = MaterialTheme.typography.labelSmall,
+                color = axisColor
+            )
         }
     }
 }

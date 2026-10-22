@@ -3,15 +3,17 @@
     <uses-feature android:name="android.hardware.type.watch" android:required="true" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
 
-    <!-- Wear OS 35+ 皮肤温度权限 -->
+    <!-- Wear OS 35+ 皮肤温度权限（targetSdk 36+ 时使用） -->
     <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE" />
-    <!-- 通用身体传感器权限（兼容旧设备） -->
+    <!-- 通用身体传感器权限（targetSdk ≤ 35 时使用） -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <!-- 三星专有健康数据权限 -->
     <uses-permission android:name="com.samsung.android.hardware.sensormanager.permission.READ_ADDITIONAL_HEALTH_DATA" />
     <!-- 活动识别，用于运动检测 -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 后台自动测量使用 JobScheduler 持久化任务，重启后需要恢复 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
         <package android:name="com.samsung.android.service.health" />
@@ -35,5 +37,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            后台自动测量任务。
+            不使用前台服务：没有常驻通知、没有 wakelock，任务结束后进程可被系统回收。
+        -->
+        <service
+            android:name=".BackgroundMeasureJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

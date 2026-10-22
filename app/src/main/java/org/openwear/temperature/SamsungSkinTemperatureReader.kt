@@ -119,11 +119,13 @@ internal class SamsungSkinTemperatureReader(
                         finish(MeasurementStatus.ERROR, "读取传感器能力失败：${it.javaClass.simpleName}")
                         return@post
                     }
+                // 优先使用连续 tracker：数据边测边回传，App 可在拿到足够稳定样本后立即结束；
+                // 按需 tracker 只能等待手表端整批测量完成，SDK 也未开放 flush 触发。
                 val trackerType = when {
-                    supported.contains(HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND) ->
-                        HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND
                     supported.contains(HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS) ->
                         HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS
+                    supported.contains(HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND) ->
+                        HealthTrackerType.SKIN_TEMPERATURE_ON_DEMAND
                     supported.contains(HealthTrackerType.SKIN_TEMPERATURE) ->
                         HealthTrackerType.SKIN_TEMPERATURE
                     else -> {
@@ -132,9 +134,14 @@ internal class SamsungSkinTemperatureReader(
                     }
                 }
                 try {
-                    skinTracker = current.getHealthTracker(trackerType)
-                    skinTracker?.setEventListener(skinTrackerListener)
+                    val tracker = current.getHealthTracker(trackerType)
+                    skinTracker = tracker
+                    tracker?.setEventListener(skinTrackerListener)
                         ?: finish(MeasurementStatus.ERROR, "SDK 未返回皮肤温度 tracker")
+                    // 连续 tracker 支持 flush：立即把已缓存的样本推给 App，缩短首次读数等待
+                    if (trackerType == HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS) {
+                        runCatching { tracker?.flush() }
+                    }
                     if (active) emit(MeasurementStatus.MEASURING, "传感器已启动，等待有效样本…")
                 } catch (error: SecurityException) {
                     finish(MeasurementStatus.PERMISSION_DENIED, "三星 Health Sensor SDK 权限被拒绝：${error.message ?: "请检查身体传感器与皮肤温度权限"}")
@@ -306,6 +313,6 @@ internal class SamsungSkinTemperatureReader(
         const val WEAR_THRESHOLD_C = 31.0f
         const val SKIN_ABOVE_AMBIENT_MIN = 2.0f
         const val MOTION_THRESHOLD = 0.15f
-        const val SAMPLE_INTERVAL_MS = 2000L
+        const val SAMPLE_INTERVAL_MS = 3000L
     }
 }

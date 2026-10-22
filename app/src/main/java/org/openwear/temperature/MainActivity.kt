@@ -121,8 +121,8 @@ class MainActivity : ComponentActivity() {
                         permissionMessage = permissionMessage,
                         onModeChanged = { mode = it },
                         onTrendRangeChanged = { trendRange = it },
-                        onAutoMeasureChanged = ::setAutoMeasure,
-                        onBackgroundIntervalChanged = ::setBackgroundInterval,
+                        onAutoMeasureChanged = ::updateAutoMeasure,
+                        onBackgroundIntervalChanged = ::updateBackgroundInterval,
                         onMeasure = ::requestMeasurementPermission
                     )
                 }
@@ -218,13 +218,13 @@ class MainActivity : ComponentActivity() {
         ).also { it.start() }
     }
 
-    private fun setAutoMeasure(enabled: Boolean) {
+    private fun updateAutoMeasure(enabled: Boolean) {
         autoMeasure = enabled
         settings.edit().putBoolean(KEY_AUTO_MEASURE, enabled).apply()
         BackgroundMeasureScheduler.setEnabled(this, enabled, backgroundInterval)
     }
 
-    private fun setBackgroundInterval(interval: BackgroundInterval) {
+    private fun updateBackgroundInterval(interval: BackgroundInterval) {
         backgroundInterval = interval
         settings.edit().putString(KEY_BACKGROUND_INTERVAL, interval.name).apply()
         if (autoMeasure) {

@@ -10,8 +10,13 @@ internal object TemperatureQuality {
     /** 判定“读数稳定”的最大波动（°C）。 */
     const val MAX_STABLE_SPREAD_C = 0.3f
 
-    /** 腕部皮肤温度的合理区间（°C）。 */
-    const val MIN_SKIN_CELSIUS = 26.0f
+    /**
+     * 腕部皮肤温度的合理区间（°C）。
+     *
+     * 下限取得比“人体体表温度”更低，是为了兼容低温环境：真正的佩戴判定靠
+     * 皮肤温度与环境温度的差值，而不是绝对值。
+     */
+    const val MIN_SKIN_CELSIUS = 22.0f
     const val MAX_SKIN_CELSIUS = 45.0f
 
     /** 环境温度的合理区间（°C）。 */

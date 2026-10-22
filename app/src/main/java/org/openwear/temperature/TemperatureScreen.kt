@@ -181,8 +181,10 @@ internal fun TemperatureScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 TransformingLazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = contentPadding + PaddingValues(horizontal = safeHorizontal),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = safeHorizontal),
+                    contentPadding = contentPadding,
                     flingBehavior = TransformingLazyColumnDefaults.snapFlingBehavior(listState),
                     rotaryScrollableBehavior = RotaryScrollableDefaults.snapBehavior(listState),
                     horizontalAlignment = Alignment.CenterHorizontally,
